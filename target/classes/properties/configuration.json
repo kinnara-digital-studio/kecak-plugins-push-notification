@@ -1,0 +1,18 @@
+[
+	{
+		"title" : "@@inboxNotificationTool.debug@@",
+		"properties" : [
+			{
+				"name" : "debug",
+				"label" : "@@inboxNotificationTool.debug@@",
+				"type" : "checkbox",
+				"options" : [
+					{
+						"value": "true",
+						"label": ""
+					}
+				]
+			}
+		]
+	}
+]
