@@ -29,6 +29,12 @@
         "type" : "textfield"
       },
       {
+        "name" : "to",
+        "label" : "@@inboxNotificationTool.to@@",
+        "required" : "true",
+        "type" : "textfield"
+      },
+      {
         "name" : "notificationTitle",
         "label" : "@@inboxNotificationTool.notificationTitle@@",
         "required" : "true",

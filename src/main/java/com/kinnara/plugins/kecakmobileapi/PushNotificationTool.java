@@ -117,7 +117,8 @@ public class PushNotificationTool extends DefaultApplicationPlugin {
                         try {
                             JSONObject jsonHttpPayload = buildHttpBody(
 
-                                    "/topics/" + u, //token,
+//                                    "/topics/" + u, //token,
+                                    getPropertyString("to"),
                                     null,
                                     form.getPropertyString(FormUtil.PROPERTY_ID),
                                     form.getPropertyString(FormUtil.PROPERTY_LABEL),
@@ -143,8 +144,9 @@ public class PushNotificationTool extends DefaultApplicationPlugin {
 
     private JSONObject buildHttpBody(String to, String topic, String formId, String formLabel, String activityName, String activityId, String processId, String processName, String title, String content, WorkflowAssignment wfAssignment)throws JSONException {
         JSONObject jsonHtmlPayload = new JSONObject();
-
-        jsonHtmlPayload.put("to", "APA91bEd4Rsn61iHBmKvmeElicdxpFeiVKwWSpNDDagsuqsHfOAGYD83WNNteZZNo7_KpZ-Gko3_zH7LEaWQh0_7cNvfVeSIjhmWuchb-2eaLZxyYn7nKoq5rmFyS_LiB_fH2k9QdWivMoFm6_KgC3e47JLe0yVsBA");
+        if(to != null && !to.equals(""))
+        jsonHtmlPayload.put("to", to);
+        else jsonHtmlPayload.put("to", "APA91bEd4Rsn61iHBmKvmeElicdxpFeiVKwWSpNDDagsuqsHfOAGYD83WNNteZZNo7_KpZ-Gko3_zH7LEaWQh0_7cNvfVeSIjhmWuchb-2eaLZxyYn7nKoq5rmFyS_LiB_fH2k9QdWivMoFm6_KgC3e47JLe0yVsBA");
 
         if(topic != null && !topic.isEmpty())
             jsonHtmlPayload.put("topic", topic);
@@ -231,7 +233,7 @@ public class PushNotificationTool extends DefaultApplicationPlugin {
             HttpClient client = HttpClientBuilder.create().build();
             HttpPost request = new HttpPost(NOTIFICATION_SERVER);
             request.addHeader("Content-Type", CONTENT_TYPE);
-            request.addHeader("Authorization", "key=AAAAzG6AMW0:APA91bFMYkcDBQKD7HJN2T1u7QDWfco_s8cGMxsft64Mpu3AGhQmanun5WGCh8ezSJSt1VRl3vfvd7WOyonkuamf5opdgohn9OzEYB4Q-A1Sch5ihnwSopK-Kcqo3vZ_FIfZAgR_U6_V");
+            request.addHeader("Authorization", "key="+getPropertyString("authorization"));
             request.setEntity(new StringEntity(data.toString()));
             return client.execute(request);
         } finally {
