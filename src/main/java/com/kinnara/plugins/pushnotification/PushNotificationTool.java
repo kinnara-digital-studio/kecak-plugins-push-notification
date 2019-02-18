@@ -24,9 +24,7 @@ import org.joget.workflow.util.WorkflowUtil;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -101,7 +99,7 @@ public class PushNotificationTool extends DefaultApplicationPlugin {
                     .distinct()
                     .collect(Collectors.toList());
 
-            if (assignmentUsers == null || assignmentUsers.isEmpty()) {
+            if (assignmentUsers.isEmpty()) {
                 LogUtil.warn(getClassName(), "No user for assignment [" + activityAssignment.getActivityId() + "] participant [" + toParticipantId + "]");
                 return null;
             }
@@ -227,6 +225,12 @@ public class PushNotificationTool extends DefaultApplicationPlugin {
     }
 
     private HttpResponse pushNotification(JSONObject data) throws IOException {
+        boolean debug = "true".equalsIgnoreCase(getPropertyString("debug"));
+
+        if(debug) {
+            LogUtil.info(getClassName(), "Request Payload ["+data.toString()+"]");
+        }
+
         ClassLoader originalClassLoader = Thread.currentThread().getContextClassLoader();
         Thread.currentThread().setContextClassLoader(this.getClass().getClassLoader());
         try {
@@ -235,7 +239,16 @@ public class PushNotificationTool extends DefaultApplicationPlugin {
             request.addHeader("Content-Type", CONTENT_TYPE);
             request.addHeader("Authorization", "key="+getPropertyString("authorization"));
             request.setEntity(new StringEntity(data.toString()));
-            return client.execute(request);
+
+            HttpResponse response = client.execute(request);
+
+            if(debug) {
+                try (BufferedReader br = new BufferedReader(new InputStreamReader(response.getEntity().getContent()))) {
+                    LogUtil.info(getClassName(), "Response Payload [" + br.lines().collect(Collectors.joining()) + "]");
+                }
+            }
+
+            return response;
         } finally {
             Thread.currentThread().setContextClassLoader(originalClassLoader);
         }
