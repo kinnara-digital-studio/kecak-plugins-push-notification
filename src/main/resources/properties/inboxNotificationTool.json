@@ -1,16 +1,16 @@
 [
   {
-    "title" : "@@inboxNotificationTool.fcmConfiguration@@",
+    "title" : "@@pushNotification.fcmConfiguration@@",
     "properties" : [
       {
         "name" : "authorization",
-        "label" : "@@inboxNotificationTool.authorization@@",
+        "label" : "@@pushNotification.authorization@@",
         "required" : "true",
         "type" : "textfield"
       },
       {
         "name" : "jsonPrivateKey",
-        "label" : "@@inboxNotificationTool.jsonPrivateKey@@",
+        "label" : "@@pushNotification.jsonPrivateKey@@",
         "required" : "true",
         "type" : "codeeditor",
         "mode": "javascript",
@@ -20,43 +20,43 @@
     ]
   },
   {
-    "title" : "@@inboxNotificationTool.notification@@",
+    "title" : "@@pushNotification.notification@@",
     "properties" : [
       {
         "name" : "participantId",
-        "label" : "@@inboxNotificationTool.participantId@@",
+        "label" : "@@pushNotification.participantId@@",
         "required" : "true",
         "type" : "textfield"
       },
       {
         "name" : "to",
-        "label" : "@@inboxNotificationTool.to@@",
+        "label" : "@@pushNotification.to@@",
         "required" : "true",
         "type" : "textfield"
       },
       {
         "name" : "notificationTitle",
-        "label" : "@@inboxNotificationTool.notificationTitle@@",
+        "label" : "@@pushNotification.notificationTitle@@",
         "required" : "true",
         "type" : "textfield",
         "value" : "New Inbox"
       },
       {
         "name" : "notificationContent",
-        "label" : "@@inboxNotificationTool.notificationContent@@",
+        "label" : "@@pushNotification.notificationContent@@",
         "type" : "textarea",
         "value" : "From : #assignment.processRequesterId#"
       },
       {
         "name" : "formId",
-        "label" : "@@inboxNotificationTool.formId@@",
+        "label" : "@@pushNotification.formId@@",
         "type" : "selectbox",
         "required" : "true",
         "options_ajax" : "[CONTEXT_PATH]/web/json/console/app[APP_PATH]/forms/options"
       },
       {
         "name" : "debug",
-        "label" : "debug",
+        "label" : "@@pushNotification.debug@@",
         "type" : "checkbox",
         "options":[{
           "value":"true",

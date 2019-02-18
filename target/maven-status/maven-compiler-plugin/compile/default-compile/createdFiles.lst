@@ -1,4 +1,0 @@
-com\kinnara\plugins\kecakmobileapi\Activator.class
-com\kinnara\plugins\kecakmobileapi\TokenService.class
-com\kinnara\plugins\kecakmobileapi\PushNotificationTool.class
-com\kinnara\plugins\kecakmobileapi\exceptions\RestApiException.class

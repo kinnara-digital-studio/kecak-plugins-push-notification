@@ -1,10 +1,10 @@
 [
 	{
-		"title" : "@@inboxNotificationTool.debug@@",
+		"title" : "@@pushNotification.debug@@",
 		"properties" : [
 			{
 				"name" : "debug",
-				"label" : "@@inboxNotificationTool.debug@@",
+				"label" : "@@pushNotification.debug@@",
 				"type" : "checkbox",
 				"options" : [
 					{
