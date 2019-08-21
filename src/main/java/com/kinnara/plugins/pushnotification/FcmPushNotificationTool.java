@@ -8,21 +8,14 @@ import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.HttpClientBuilder;
-import org.joget.apps.app.dao.FormDefinitionDao;
-import org.joget.apps.app.model.AppDefinition;
-import org.joget.apps.app.model.FormDefinition;
 import org.joget.apps.app.service.AppUtil;
 import org.joget.apps.form.model.Form;
-import org.joget.apps.form.model.FormData;
-import org.joget.apps.form.service.FormService;
 import org.joget.commons.util.LogUtil;
 import org.joget.plugin.base.DefaultApplicationPlugin;
 import org.joget.workflow.model.WorkflowAssignment;
-import org.joget.workflow.model.service.WorkflowManager;
 import org.joget.workflow.util.WorkflowUtil;
 import org.json.JSONException;
 import org.json.JSONObject;
-import org.kecak.apps.mobile.dao.MobileDao;
 import org.springframework.context.ApplicationContext;
 
 import java.io.*;
@@ -63,9 +56,6 @@ public class FcmPushNotificationTool extends DefaultApplicationPlugin {
 
     @Override
     public Object execute(Map props) {
-        ApplicationContext applicationContext = AppUtil.getApplicationContext();
-        MobileDao mobileDao = (MobileDao) applicationContext.getBean("mobileDao");
-
         ClassLoader originalClassLoader = Thread.currentThread().getContextClassLoader();
         try {
             if (!fcmInitialized) {
@@ -117,7 +107,7 @@ public class FcmPushNotificationTool extends DefaultApplicationPlugin {
                     .forEach(u -> {
                         try {
                             JSONObject jsonHttpPayload = buildHttpBody(
-                                    null, //getPropertyString("to"),
+                                    null,
                                     "/topics/" + u,
                                     activityAssignment.getActivityName(),
                                     activityAssignment.getActivityId(),
@@ -166,10 +156,8 @@ public class FcmPushNotificationTool extends DefaultApplicationPlugin {
 
     private JSONObject buildHttpBody(String to, String topic, String activityName, String activityId, String processId, String processName, String title, String content, WorkflowAssignment wfAssignment)throws JSONException {
         JSONObject jsonHtmlPayload = new JSONObject();
-        if(to != null && !to.equals(""))
+        if(to != null && !to.isEmpty())
             jsonHtmlPayload.put("to", to);
-        else
-            jsonHtmlPayload.put("to", "APA91bEd4Rsn61iHBmKvmeElicdxpFeiVKwWSpNDDagsuqsHfOAGYD83WNNteZZNo7_KpZ-Gko3_zH7LEaWQh0_7cNvfVeSIjhmWuchb-2eaLZxyYn7nKoq5rmFyS_LiB_fH2k9QdWivMoFm6_KgC3e47JLe0yVsBA");
 
         if(topic != null && !topic.isEmpty())
             jsonHtmlPayload.put("topic", topic);
@@ -183,17 +171,13 @@ public class FcmPushNotificationTool extends DefaultApplicationPlugin {
         jsonData.put("activityId", activityId);
         jsonData.put("processId", processId);
         jsonData.put("processName", processName);
-
         jsonHtmlPayload.put("data", jsonData);
 
+        JSONObject jsonNotification = new JSONObject();
+        jsonNotification.put("title", title);
+        jsonNotification.put("body", content);
+        jsonHtmlPayload.put("notification", jsonNotification);
 
-//		{
-//			JSONObject jsonNotification = new JSONObject();
-//			jsonNotification.put("title", title);
-//			jsonNotification.put("body", processName + " : " + activityName);
-//
-//			jsonHtmlPayload.put("notification", jsonNotification);
-//		}
         return jsonHtmlPayload;
     }
 
@@ -217,21 +201,25 @@ public class FcmPushNotificationTool extends DefaultApplicationPlugin {
             HttpClient client = HttpClientBuilder.create().build();
             HttpPost request = new HttpPost(NOTIFICATION_SERVER);
             request.addHeader("Content-Type", CONTENT_TYPE);
-            request.addHeader("Authorization", "key="+getPropertyString("authorization"));
+            request.addHeader("Authorization", "key=" + getPropertyString("authorization"));
             request.setEntity(new StringEntity(data.toString()));
 
             HttpResponse response = client.execute(request);
 
-            if(debug) {
+            if (debug) {
                 try (BufferedReader br = new BufferedReader(new InputStreamReader(response.getEntity().getContent()))) {
                     LogUtil.info(getClassName(), "Response Payload [" + br.lines().collect(Collectors.joining()) + "]");
                 }
             }
 
             return response;
+        } catch (Exception e) {
+            LogUtil.error(getClassName(), e, e.getMessage());
         } finally {
             Thread.currentThread().setContextClassLoader(originalClassLoader);
         }
+
+        return null;
     }
 
     private void initializeSdk() throws IOException {
