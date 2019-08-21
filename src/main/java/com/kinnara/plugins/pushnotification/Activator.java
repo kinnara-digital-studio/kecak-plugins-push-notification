@@ -14,7 +14,7 @@ public class Activator implements BundleActivator {
         registrationList = new ArrayList<ServiceRegistration>();
 
         //Register plugin here
-        registrationList.add(context.registerService(PushNotificationTool.class.getName(), new PushNotificationTool(), null));
+        registrationList.add(context.registerService(FcmPushNotificationTool.class.getName(), new FcmPushNotificationTool(), null));
     }
 
     public void stop(BundleContext context) {

@@ -25,13 +25,12 @@
       {
         "name" : "participantId",
         "label" : "@@pushNotification.participantId@@",
-        "required" : "true",
         "type" : "textfield"
       },
       {
         "name" : "to",
         "label" : "@@pushNotification.to@@",
-        "required" : "true",
+        "description" : "@@pushNotification.to.description@@",
         "type" : "textfield"
       },
       {
@@ -46,13 +45,6 @@
         "label" : "@@pushNotification.notificationContent@@",
         "type" : "textarea",
         "value" : "From : #assignment.processRequesterId#"
-      },
-      {
-        "name" : "formId",
-        "label" : "@@pushNotification.formId@@",
-        "type" : "selectbox",
-        "required" : "true",
-        "options_ajax" : "[CONTEXT_PATH]/web/json/console/app[APP_PATH]/forms/options"
       },
       {
         "name" : "debug",

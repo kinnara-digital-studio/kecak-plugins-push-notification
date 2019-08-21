@@ -15,7 +15,6 @@ import org.joget.apps.app.service.AppUtil;
 import org.joget.apps.form.model.Form;
 import org.joget.apps.form.model.FormData;
 import org.joget.apps.form.service.FormService;
-import org.joget.apps.form.service.FormUtil;
 import org.joget.commons.util.LogUtil;
 import org.joget.plugin.base.DefaultApplicationPlugin;
 import org.joget.workflow.model.WorkflowAssignment;
@@ -23,12 +22,15 @@ import org.joget.workflow.model.service.WorkflowManager;
 import org.joget.workflow.util.WorkflowUtil;
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.kecak.apps.mobile.dao.MobileDao;
+import org.springframework.context.ApplicationContext;
 
 import java.io.*;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
-public class PushNotificationTool extends DefaultApplicationPlugin {
+public class FcmPushNotificationTool extends DefaultApplicationPlugin {
     private final static String NOTIFICATION_SERVER = "https://fcm.googleapis.com/fcm/send";
     private final static String CONTENT_TYPE = "application/json";
 
@@ -47,7 +49,7 @@ public class PushNotificationTool extends DefaultApplicationPlugin {
         return AppUtil.readPluginResource(this.getClass().getName(), "/properties/inboxNotificationTool.json", null, true, "message/inboxNotificationTool");}
 
     public String getName() {
-        return "Kecak Mobile API - Push Notification Tool";
+        return "FCM Push Notification Tool";
     }
 
     public String getVersion() {
@@ -61,6 +63,9 @@ public class PushNotificationTool extends DefaultApplicationPlugin {
 
     @Override
     public Object execute(Map props) {
+        ApplicationContext applicationContext = AppUtil.getApplicationContext();
+        MobileDao mobileDao = (MobileDao) applicationContext.getBean("mobileDao");
+
         ClassLoader originalClassLoader = Thread.currentThread().getContextClassLoader();
         try {
             if (!fcmInitialized) {
@@ -84,7 +89,6 @@ public class PushNotificationTool extends DefaultApplicationPlugin {
             List<String> assignmentUsers = Arrays.stream(toParticipantId.split("[,;]"))
                     .map(String::trim)
                     .filter(p -> !p.isEmpty())
-                    .peek(p -> LogUtil.info(getClassName(), "participantId ["+p+"]"))
                     .map(p -> WorkflowUtil.getAssignmentUsers(
                             WorkflowUtil.getProcessDefPackageId(activityAssignment.getProcessDefId()),
                             activityAssignment.getProcessDefId(),
@@ -104,8 +108,7 @@ public class PushNotificationTool extends DefaultApplicationPlugin {
                 return null;
             }
 
-            Form form = generateForm(getPropertyString("formId"), formCache);
-
+            // push to participants
             assignmentUsers
                     .stream()
                     .filter(Objects::nonNull)
@@ -114,12 +117,8 @@ public class PushNotificationTool extends DefaultApplicationPlugin {
                     .forEach(u -> {
                         try {
                             JSONObject jsonHttpPayload = buildHttpBody(
-
-//                                    "/topics/" + u, //token,
-                                    getPropertyString("to"),
-                                    null,
-                                    form.getPropertyString(FormUtil.PROPERTY_ID),
-                                    form.getPropertyString(FormUtil.PROPERTY_LABEL),
+                                    null, //getPropertyString("to"),
+                                    "/topics/" + u,
                                     activityAssignment.getActivityName(),
                                     activityAssignment.getActivityId(),
                                     activityAssignment.getProcessId(),
@@ -130,7 +129,32 @@ public class PushNotificationTool extends DefaultApplicationPlugin {
 
                             pushNotification(jsonHttpPayload);
                         } catch (IOException | JSONException e) {
-                            e.printStackTrace();
+                            LogUtil.error(getClassName(), e, e.getMessage());
+                        }
+                    });
+
+            // push to specific device Id
+            Optional.ofNullable(getPropertyString("to"))
+                    .map(s -> s.split("[;,]"))
+                    .map(Arrays::stream)
+                    .orElse(Stream.empty())
+                    .filter(s -> !s.isEmpty())
+                    .forEach(s -> {
+                        try {
+                            JSONObject jsonHttpPayload = buildHttpBody(
+                                    s,
+                                    null,
+                                    activityAssignment.getActivityName(),
+                                    activityAssignment.getActivityId(),
+                                    activityAssignment.getProcessId(),
+                                    activityAssignment.getProcessName(),
+                                    AppUtil.processHashVariable(getPropertyString("notificationTitle"), activityAssignment, null, null),
+                                    AppUtil.processHashVariable(getPropertyString("notificationContent"), activityAssignment, null, null),
+                                    activityAssignment);
+
+                            pushNotification(jsonHttpPayload);
+                        } catch (IOException | JSONException e) {
+                            LogUtil.error(getClassName(), e, e.getMessage());
                         }
                     });
         } finally {
@@ -140,11 +164,12 @@ public class PushNotificationTool extends DefaultApplicationPlugin {
         return null;
     }
 
-    private JSONObject buildHttpBody(String to, String topic, String formId, String formLabel, String activityName, String activityId, String processId, String processName, String title, String content, WorkflowAssignment wfAssignment)throws JSONException {
+    private JSONObject buildHttpBody(String to, String topic, String activityName, String activityId, String processId, String processName, String title, String content, WorkflowAssignment wfAssignment)throws JSONException {
         JSONObject jsonHtmlPayload = new JSONObject();
         if(to != null && !to.equals(""))
-        jsonHtmlPayload.put("to", to);
-        else jsonHtmlPayload.put("to", "APA91bEd4Rsn61iHBmKvmeElicdxpFeiVKwWSpNDDagsuqsHfOAGYD83WNNteZZNo7_KpZ-Gko3_zH7LEaWQh0_7cNvfVeSIjhmWuchb-2eaLZxyYn7nKoq5rmFyS_LiB_fH2k9QdWivMoFm6_KgC3e47JLe0yVsBA");
+            jsonHtmlPayload.put("to", to);
+        else
+            jsonHtmlPayload.put("to", "APA91bEd4Rsn61iHBmKvmeElicdxpFeiVKwWSpNDDagsuqsHfOAGYD83WNNteZZNo7_KpZ-Gko3_zH7LEaWQh0_7cNvfVeSIjhmWuchb-2eaLZxyYn7nKoq5rmFyS_LiB_fH2k9QdWivMoFm6_KgC3e47JLe0yVsBA");
 
         if(topic != null && !topic.isEmpty())
             jsonHtmlPayload.put("topic", topic);
@@ -154,8 +179,6 @@ public class PushNotificationTool extends DefaultApplicationPlugin {
         JSONObject jsonData = new JSONObject();
         jsonData.put("title", title);
         jsonData.put("message", content);
-        jsonData.put("formId", formId);
-        jsonData.put("formLabel", formLabel);
         jsonData.put("activityName", activityName);
         jsonData.put("activityId", activityId);
         jsonData.put("processId", processId);
@@ -175,55 +198,12 @@ public class PushNotificationTool extends DefaultApplicationPlugin {
     }
 
     /**
-     * Construct form from formId
-     /* @param formDefId
-     /* @param formCache
-     /* @return
+     * Trigger Notification
+     *
+     * @param data
+     * @return
+     * @throws IOException
      */
-    private Form generateForm(String formDefId, Map<String, Form> formCache) {
-        return generateForm(formDefId, null, formCache);
-    }
-
-    /**
-     * Construct form from formId
-     /* @param formDefId
-     /* @param processId
-     /* @param formCache
-     /* @return
-     */
-    private Form generateForm(String formDefId, String processId, Map<String, Form> formCache) {
-        // check in cache
-        if(formCache != null && formCache.containsKey(formDefId))
-            return formCache.get(formDefId);
-
-        // proceed without cache
-        FormService formService = (FormService)AppUtil.getApplicationContext().getBean("formService");
-        Form form;
-        AppDefinition appDef = AppUtil.getCurrentAppDefinition();
-        if (appDef != null && formDefId != null && !formDefId.isEmpty()) {
-            FormDefinitionDao formDefinitionDao = (FormDefinitionDao)AppUtil.getApplicationContext().getBean("formDefinitionDao");
-            FormDefinition formDef = formDefinitionDao.loadById(formDefId, appDef);
-            if (formDef != null) {
-                FormData formData = new FormData();
-                String json = formDef.getJson();
-                if (processId != null && !processId.isEmpty()) {
-                    formData.setProcessId(processId);
-                    WorkflowManager wm = (WorkflowManager)AppUtil.getApplicationContext().getBean("workflowManager");
-                    WorkflowAssignment wfAssignment = wm.getAssignmentByProcess(processId);
-                    json = AppUtil.processHashVariable(json, wfAssignment, "json", null);
-                }
-                form = (Form)formService.createElementFromJson(json);
-
-                // put in cache if possible
-                if(formCache != null)
-                    formCache.put(formDefId, form);
-
-                return form;
-            }
-        }
-        return null;
-    }
-
     private HttpResponse pushNotification(JSONObject data) throws IOException {
         boolean debug = "true".equalsIgnoreCase(getPropertyString("debug"));
 
