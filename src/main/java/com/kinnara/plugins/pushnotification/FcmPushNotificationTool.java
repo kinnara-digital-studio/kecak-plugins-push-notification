@@ -171,6 +171,7 @@ public class FcmPushNotificationTool extends DefaultApplicationPlugin {
         jsonData.put("activityId", activityId);
         jsonData.put("processId", processId);
         jsonData.put("processName", processName);
+        jsonData.put("click_action", "FLUTTER_NOTIFICATION_CLICK");
         jsonHtmlPayload.put("data", jsonData);
 
         JSONObject jsonNotification = new JSONObject();
