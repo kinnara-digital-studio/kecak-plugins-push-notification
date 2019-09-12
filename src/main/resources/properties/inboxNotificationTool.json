@@ -56,5 +56,25 @@
         }]
       }
     ]
+  },
+  {
+    "title" : "@@userview.datalistinboxmenu.activity@@",
+    "properties" : [
+      {
+        "name" : "processId",
+        "label" : ",@@userview.datalistinboxmenu.process@@",
+        "type" : "selectbox",
+        "required" : "true",
+        "options_ajax" : "[CONTEXT_PATH]/web/json/app[APP_PATH]/plugin/%s/service?action=getProcesses"
+      },
+      {
+        "name" : "activityDefId",
+        "label" : "@@userview.datalistinboxmenu.activity@@",
+        "type" : "selectbox",
+        "required" : "true",
+        "options_ajax_on_change" : "processId",
+        "options_ajax" : "[CONTEXT_PATH]/web/json/app[APP_PATH]/plugin/%s/service?action=getActivities"
+      }
+    ]
   }
 ]

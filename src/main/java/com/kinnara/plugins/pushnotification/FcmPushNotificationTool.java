@@ -8,51 +8,70 @@ import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.HttpClientBuilder;
+import org.joget.apps.app.model.AppDefinition;
+import org.joget.apps.app.model.PackageActivityForm;
+import org.joget.apps.app.model.PackageActivityPlugin;
+import org.joget.apps.app.model.PackageDefinition;
+import org.joget.apps.app.service.AppService;
 import org.joget.apps.app.service.AppUtil;
 import org.joget.apps.form.model.Form;
 import org.joget.commons.util.LogUtil;
 import org.joget.plugin.base.DefaultApplicationPlugin;
+import org.joget.plugin.base.PluginWebSupport;
+import org.joget.workflow.model.WorkflowActivity;
 import org.joget.workflow.model.WorkflowAssignment;
+import org.joget.workflow.model.WorkflowPackage;
+import org.joget.workflow.model.WorkflowProcess;
+import org.joget.workflow.model.service.WorkflowManager;
 import org.joget.workflow.util.WorkflowUtil;
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.springframework.context.ApplicationContext;
 
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 import java.io.*;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public class FcmPushNotificationTool extends DefaultApplicationPlugin {
+public class FcmPushNotificationTool extends DefaultApplicationPlugin implements PluginWebSupport {
     private final static String NOTIFICATION_SERVER = "https://fcm.googleapis.com/fcm/send";
     private final static String CONTENT_TYPE = "application/json";
 
     private Map<String, Form> formCache = new HashMap<>();
     private static boolean fcmInitialized = false;
 
+    @Override
     public String getLabel() {
         return getName();
     }
 
+    @Override
     public String getClassName() {
         return getClass().getName();
     }
 
+    @Override
     public String getPropertyOptions() {
-        return AppUtil.readPluginResource(this.getClass().getName(), "/properties/inboxNotificationTool.json", null, true, "message/inboxNotificationTool");}
+        return AppUtil.readPluginResource(this.getClass().getName(), "/properties/inboxNotificationTool.json", new String[] {getClassName(), getClassName()}, true, "message/inboxNotificationTool");}
 
+    @Override
     public String getName() {
         return "FCM Push Notification Tool";
     }
 
+    @Override
     public String getVersion() {
         return getClass().getPackage().getImplementationVersion();
     }
 
+    @Override
     public String getDescription() {
         return getClass().getPackage().getImplementationTitle();
     }
-
 
     @Override
     public Object execute(Map props) {
@@ -67,8 +86,11 @@ public class FcmPushNotificationTool extends DefaultApplicationPlugin {
                 }
             }
 
+
             WorkflowAssignment activityAssignment = (WorkflowAssignment) props.get("workflowAssignment");
-            if (activityAssignment == null) {
+//            WorkflowManager workflowManager = (WorkflowManager) AppUtil.getApplicationContext().getBean("workflowManager");
+//            WorkflowAssignment activityAssignment = workflowManager.getAssignmentByProcess(((WorkflowAssignment) props.get("workflowAssignment")).getProcessId());
+            if(activityAssignment == null) {
                 LogUtil.warn(getClassName(), "No assignment found");
                 return null;
             }
@@ -98,6 +120,9 @@ public class FcmPushNotificationTool extends DefaultApplicationPlugin {
                 return null;
             }
 
+            final String processDefId = getPropertyString("processId");
+            final String activityDefId = getPropertyString("activityDefId");
+
             // push to participants
             assignmentUsers
                     .stream()
@@ -109,6 +134,8 @@ public class FcmPushNotificationTool extends DefaultApplicationPlugin {
                             JSONObject jsonHttpPayload = buildHttpBody(
                                     null,
                                     "/topics/" + u,
+                                    processDefId,
+                                    activityDefId,
                                     activityAssignment.getActivityName(),
                                     activityAssignment.getActivityId(),
                                     activityAssignment.getProcessId(),
@@ -134,6 +161,8 @@ public class FcmPushNotificationTool extends DefaultApplicationPlugin {
                             JSONObject jsonHttpPayload = buildHttpBody(
                                     s,
                                     null,
+                                    processDefId,
+                                    activityDefId,
                                     activityAssignment.getActivityName(),
                                     activityAssignment.getActivityId(),
                                     activityAssignment.getProcessId(),
@@ -154,7 +183,7 @@ public class FcmPushNotificationTool extends DefaultApplicationPlugin {
         return null;
     }
 
-    private JSONObject buildHttpBody(String to, String topic, String activityName, String activityId, String processId, String processName, String title, String content, WorkflowAssignment wfAssignment)throws JSONException {
+    private JSONObject buildHttpBody(String to, String topic, String processDefId, String activityDefId, String activityName, String activityId, String processId, String processName, String title, String content, WorkflowAssignment wfAssignment)throws JSONException {
         JSONObject jsonHtmlPayload = new JSONObject();
         if(to != null && !to.isEmpty())
             jsonHtmlPayload.put("to", to);
@@ -171,6 +200,7 @@ public class FcmPushNotificationTool extends DefaultApplicationPlugin {
         jsonData.put("activityId", activityId);
         jsonData.put("processId", processId);
         jsonData.put("processName", processName);
+        jsonData.put("formId", getFormFromActivity(processDefId, activityDefId));
         jsonData.put("click_action", "FLUTTER_NOTIFICATION_CLICK");
         jsonHtmlPayload.put("data", jsonData);
 
@@ -180,6 +210,22 @@ public class FcmPushNotificationTool extends DefaultApplicationPlugin {
         jsonHtmlPayload.put("notification", jsonNotification);
 
         return jsonHtmlPayload;
+    }
+
+    /**
+     * Get Form from Activity
+     * @param processDefId
+     * @param activityDefId
+     * @return
+     */
+    private String getFormFromActivity(String processDefId, String activityDefId) {
+        if(activityDefId == null)
+            return null;
+
+        AppDefinition appDefinition = AppUtil.getCurrentAppDefinition();
+        AppService appService = (AppService) AppUtil.getApplicationContext().getBean("appService");
+        PackageActivityForm packageActivityForm = appService.retrieveMappedForm(appDefinition.getAppId(), String.valueOf(appDefinition.getVersion()), processDefId, activityDefId);
+        return packageActivityForm == null ? null : packageActivityForm.getFormId();
     }
 
     /**
@@ -234,5 +280,73 @@ public class FcmPushNotificationTool extends DefaultApplicationPlugin {
 
     private InputStream getServiceAccount() {
         return new ByteArrayInputStream(getPropertyString("jsonPrivateKey").getBytes());
+    }
+
+    @Override
+    public void webService(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        boolean isAdmin = WorkflowUtil.isCurrentUserInRole((String)"ROLE_ADMIN");
+        if (!isAdmin) {
+            response.sendError(401);
+            return;
+        }
+        String action = request.getParameter("action");
+        String appId = request.getParameter("appId");
+        String appVersion = request.getParameter("appVersion");
+        ApplicationContext ac = AppUtil.getApplicationContext();
+        AppService appService = (AppService)ac.getBean("appService");
+        WorkflowManager workflowManager = (WorkflowManager)ac.getBean("workflowManager");
+        AppDefinition appDef = appService.getAppDefinition(appId, appVersion);
+        if ("getProcesses".equals(action)) {
+            try {
+                JSONArray jsonArray = new JSONArray();
+                PackageDefinition packageDefinition = appDef.getPackageDefinition();
+                Long packageVersion = packageDefinition != null ? packageDefinition.getVersion() : new Long(1);
+                Collection<WorkflowProcess> processList = workflowManager.getProcessList(appId, packageVersion.toString());
+                HashMap<String, String> empty = new HashMap<>();
+                empty.put("value", "");
+                empty.put("label", "");
+                jsonArray.put(empty);
+                for (WorkflowProcess p : processList) {
+                    HashMap<String, String> option = new HashMap<String, String>();
+                    option.put("value", p.getIdWithoutVersion());
+                    option.put("label", p.getName() + " (" + p.getIdWithoutVersion() + ")");
+                    jsonArray.put(option);
+                }
+                jsonArray.write(response.getWriter());
+            }
+            catch (Exception ex) {
+                LogUtil.error(getClassName(), ex, "Get Process options Error!");
+            }
+        } else if ("getActivities".equals(action)) {
+            try {
+                JSONArray jsonArray = new JSONArray();
+                HashMap<String, String> empty = new HashMap<String, String>();
+                empty.put("value", "");
+                empty.put("label", "");
+                jsonArray.put(empty);
+                String processId = request.getParameter("processId");
+                if (!"null".equalsIgnoreCase(processId) && !processId.isEmpty()) {
+                    String processDefId = "";
+                    if (appDef != null) {
+                        WorkflowProcess process = appService.getWorkflowProcessForApp(appDef.getId(), appDef.getVersion().toString(), processId);
+                        processDefId = process.getId();
+                    }
+                    Collection<WorkflowActivity> activityList = workflowManager.getProcessActivityDefinitionList(processDefId);
+                    for (WorkflowActivity a : activityList) {
+                        if (a.getType().equals("route") || a.getType().equals("tool")) continue;
+                        HashMap<String, String> option = new HashMap<String, String>();
+                        option.put("value", a.getActivityDefId());
+                        option.put("label", a.getName() + " (" + a.getActivityDefId() + ")");
+                        jsonArray.put(option);
+                    }
+                }
+                jsonArray.write(response.getWriter());
+            }
+            catch (Exception ex) {
+                LogUtil.error(getClass().getName(), ex, "Get activity options Error!");
+            }
+        } else {
+            response.setStatus(204);
+        }
     }
 }
