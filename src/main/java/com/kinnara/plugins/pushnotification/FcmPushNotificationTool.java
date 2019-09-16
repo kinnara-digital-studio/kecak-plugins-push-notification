@@ -184,6 +184,8 @@ public class FcmPushNotificationTool extends DefaultApplicationPlugin implements
     }
 
     private JSONObject buildHttpBody(String to, String topic, String processDefId, String activityDefId, String activityName, String activityId, String processId, String processName, String title, String content, WorkflowAssignment wfAssignment)throws JSONException {
+        AppDefinition appDefinition = AppUtil.getCurrentAppDefinition();
+
         JSONObject jsonHtmlPayload = new JSONObject();
         if(to != null && !to.isEmpty())
             jsonHtmlPayload.put("to", to);
@@ -200,6 +202,8 @@ public class FcmPushNotificationTool extends DefaultApplicationPlugin implements
         jsonData.put("activityId", activityId);
         jsonData.put("processId", processId);
         jsonData.put("processName", processName);
+        jsonData.put("appId", appDefinition.getAppId());
+        jsonData.put("appVersion", appDefinition.getVersion());
         jsonData.put("formId", getFormFromActivity(processDefId, activityDefId));
         jsonData.put("click_action", "FLUTTER_NOTIFICATION_CLICK");
         jsonHtmlPayload.put("data", jsonData);
