@@ -4,13 +4,13 @@ import com.google.auth.oauth2.GoogleCredentials;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.FirebaseOptions;
 import org.apache.http.HttpResponse;
-import org.apache.http.client.HttpClient;
+import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.StringEntity;
+import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.joget.apps.app.model.AppDefinition;
 import org.joget.apps.app.model.PackageActivityForm;
-import org.joget.apps.app.model.PackageActivityPlugin;
 import org.joget.apps.app.model.PackageDefinition;
 import org.joget.apps.app.service.AppService;
 import org.joget.apps.app.service.AppUtil;
@@ -20,7 +20,6 @@ import org.joget.plugin.base.DefaultApplicationPlugin;
 import org.joget.plugin.base.PluginWebSupport;
 import org.joget.workflow.model.WorkflowActivity;
 import org.joget.workflow.model.WorkflowAssignment;
-import org.joget.workflow.model.WorkflowPackage;
 import org.joget.workflow.model.WorkflowProcess;
 import org.joget.workflow.model.service.WorkflowManager;
 import org.joget.workflow.util.WorkflowUtil;
@@ -248,14 +247,14 @@ public class FcmPushNotificationTool extends DefaultApplicationPlugin implements
 
         ClassLoader originalClassLoader = Thread.currentThread().getContextClassLoader();
         Thread.currentThread().setContextClassLoader(this.getClass().getClassLoader());
-        try {
-            HttpClient client = HttpClientBuilder.create().build();
-            HttpPost request = new HttpPost(NOTIFICATION_SERVER);
-            request.addHeader("Content-Type", CONTENT_TYPE);
-            request.addHeader("Authorization", "key=" + getPropertyString("authorization"));
-            request.setEntity(new StringEntity(data.toString()));
 
-            HttpResponse response = client.execute(request);
+        HttpPost request = new HttpPost(NOTIFICATION_SERVER);
+        request.addHeader("Content-Type", CONTENT_TYPE);
+        request.addHeader("Authorization", "key=" + getPropertyString("authorization"));
+        request.setEntity(new StringEntity(data.toString()));
+
+        try(CloseableHttpClient client = HttpClientBuilder.create().build();
+            CloseableHttpResponse response = client.execute(request)) {
 
             if (debug) {
                 try (BufferedReader br = new BufferedReader(new InputStreamReader(response.getEntity().getContent()))) {
