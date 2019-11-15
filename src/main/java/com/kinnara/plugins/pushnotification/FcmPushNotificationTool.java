@@ -4,6 +4,7 @@ import com.google.auth.oauth2.GoogleCredentials;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.FirebaseOptions;
 import org.apache.http.HttpResponse;
+import org.apache.http.StatusLine;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.StringEntity;
@@ -20,6 +21,7 @@ import org.joget.plugin.base.DefaultApplicationPlugin;
 import org.joget.plugin.base.PluginWebSupport;
 import org.joget.workflow.model.WorkflowActivity;
 import org.joget.workflow.model.WorkflowAssignment;
+import org.joget.workflow.model.WorkflowParticipant;
 import org.joget.workflow.model.WorkflowProcess;
 import org.joget.workflow.model.service.WorkflowManager;
 import org.joget.workflow.util.WorkflowUtil;
@@ -55,7 +57,7 @@ public class FcmPushNotificationTool extends DefaultApplicationPlugin implements
 
     @Override
     public String getPropertyOptions() {
-        return AppUtil.readPluginResource(this.getClass().getName(), "/properties/inboxNotificationTool.json", new String[] {getClassName(), getClassName()}, true, "message/inboxNotificationTool");}
+        return AppUtil.readPluginResource(this.getClass().getName(), "/properties/inboxNotificationTool.json", new String[] {getClassName(), getClassName(), getClassName()}, true, "message/inboxNotificationTool");}
 
     @Override
     public String getName() {
@@ -87,16 +89,18 @@ public class FcmPushNotificationTool extends DefaultApplicationPlugin implements
 
 
             WorkflowAssignment activityAssignment = (WorkflowAssignment) props.get("workflowAssignment");
-//            WorkflowManager workflowManager = (WorkflowManager) AppUtil.getApplicationContext().getBean("workflowManager");
-//            WorkflowAssignment activityAssignment = workflowManager.getAssignmentByProcess(((WorkflowAssignment) props.get("workflowAssignment")).getProcessId());
             if(activityAssignment == null) {
                 LogUtil.warn(getClassName(), "No assignment found");
                 return null;
             }
 
-            LogUtil.info(getClassName(), activityAssignment.getActivityDefId());
 
             String toParticipantId = getPropertyString("participantId");
+            String[] toUserId = getPropertyString("userId").split("[;,]");
+
+            final String processDefId = getPropertyString("processId");
+            final String activityDefId = getPropertyString("activityDefId");
+
             List<String> assignmentUsers = Arrays.stream(toParticipantId.split("[,;]"))
                     .map(String::trim)
                     .filter(p -> !p.isEmpty())
@@ -114,21 +118,12 @@ public class FcmPushNotificationTool extends DefaultApplicationPlugin implements
                     .distinct()
                     .collect(Collectors.toList());
 
-            if (assignmentUsers.isEmpty()) {
-                LogUtil.warn(getClassName(), "No user for assignment [" + activityAssignment.getActivityId() + "] participant [" + toParticipantId + "]");
-                return null;
-            }
-
-            final String processDefId = getPropertyString("processId");
-            final String activityDefId = getPropertyString("activityDefId");
-
-            // push to participants
-            assignmentUsers
-                    .stream()
+            long notificationCount = Stream.concat(assignmentUsers.stream(), Arrays.stream(toUserId))
                     .filter(Objects::nonNull)
                     .filter(u -> !u.isEmpty())
-                    .peek(u -> LogUtil.info(getClassName(), "Sending notification for process [" + activityAssignment.getProcessId() + "] user [" + u + "]"))
-                    .forEach(u -> {
+                    .distinct()
+                    .peek(u -> LogUtil.info(getClassName(), "Sending notification for process [" + activityAssignment.getProcessId() + "] to user [" + u + "]"))
+                    .map(u -> {
                         try {
                             JSONObject jsonHttpPayload = buildHttpBody(
                                     null,
@@ -143,38 +138,53 @@ public class FcmPushNotificationTool extends DefaultApplicationPlugin implements
                                     AppUtil.processHashVariable(getPropertyString("notificationContent"), activityAssignment, null, null),
                                     activityAssignment);
 
-                            pushNotification(jsonHttpPayload);
+                            HttpResponse response = pushNotification(jsonHttpPayload);
+
+                            // return true when status = 200
+                            return Optional
+                                    .ofNullable(response)
+                                    .map(HttpResponse::getStatusLine)
+                                    .map(StatusLine::getStatusCode)
+                                    .orElse(0) == 200;
                         } catch (IOException | JSONException e) {
                             LogUtil.error(getClassName(), e, e.getMessage());
                         }
-                    });
 
-            // push to specific device Id
-            Optional.ofNullable(getPropertyString("to"))
-                    .map(s -> s.split("[;,]"))
-                    .map(Arrays::stream)
-                    .orElse(Stream.empty())
-                    .filter(s -> !s.isEmpty())
-                    .forEach(s -> {
-                        try {
-                            JSONObject jsonHttpPayload = buildHttpBody(
-                                    s,
-                                    null,
-                                    processDefId,
-                                    activityDefId,
-                                    activityAssignment.getActivityName(),
-                                    activityAssignment.getActivityId(),
-                                    activityAssignment.getProcessId(),
-                                    activityAssignment.getProcessName(),
-                                    AppUtil.processHashVariable(getPropertyString("notificationTitle"), activityAssignment, null, null),
-                                    AppUtil.processHashVariable(getPropertyString("notificationContent"), activityAssignment, null, null),
-                                    activityAssignment);
+                        return false;
+                    })
+                    .filter(b -> b)
+                    .count();
 
-                            pushNotification(jsonHttpPayload);
-                        } catch (IOException | JSONException e) {
-                            LogUtil.error(getClassName(), e, e.getMessage());
-                        }
-                    });
+            if(notificationCount == 0) {
+                LogUtil.warn(getClassName(), "Nobody received tbe notification");
+            }
+
+//            // push to specific device Id
+//            Optional.ofNullable(getPropertyString("to"))
+//                    .map(s -> s.split("[;,]"))
+//                    .map(Arrays::stream)
+//                    .orElse(Stream.empty())
+//                    .filter(s -> !s.isEmpty())
+//                    .forEach(s -> {
+//                        try {
+//                            JSONObject jsonHttpPayload = buildHttpBody(
+//                                    s,
+//                                    null,
+//                                    processDefId,
+//                                    activityDefId,
+//                                    activityAssignment.getActivityName(),
+//                                    activityAssignment.getActivityId(),
+//                                    activityAssignment.getProcessId(),
+//                                    activityAssignment.getProcessName(),
+//                                    AppUtil.processHashVariable(getPropertyString("notificationTitle"), activityAssignment, null, null),
+//                                    AppUtil.processHashVariable(getPropertyString("notificationContent"), activityAssignment, null, null),
+//                                    activityAssignment);
+//
+//                            pushNotification(jsonHttpPayload);
+//                        } catch (IOException | JSONException e) {
+//                            LogUtil.error(getClassName(), e, e.getMessage());
+//                        }
+//                    });
         } finally {
             Thread.currentThread().setContextClassLoader(originalClassLoader);
         }
@@ -323,7 +333,7 @@ public class FcmPushNotificationTool extends DefaultApplicationPlugin implements
         } else if ("getActivities".equals(action)) {
             try {
                 JSONArray jsonArray = new JSONArray();
-                HashMap<String, String> empty = new HashMap<String, String>();
+                HashMap<String, String> empty = new HashMap<>();
                 empty.put("value", "");
                 empty.put("label", "");
                 jsonArray.put(empty);
@@ -344,9 +354,35 @@ public class FcmPushNotificationTool extends DefaultApplicationPlugin implements
                     }
                 }
                 jsonArray.write(response.getWriter());
-            }
-            catch (Exception ex) {
+            } catch (Exception ex) {
                 LogUtil.error(getClass().getName(), ex, "Get activity options Error!");
+            }
+        } else if("getParticipants".equals(action)) {
+            try {
+                JSONArray jsonArray = new JSONArray();
+                HashMap<String, String> empty = new HashMap<String, String>();
+                empty.put("value", "");
+                empty.put("label", "");
+                jsonArray.put(empty);
+                String processId = request.getParameter("processId");
+                if (!"null".equalsIgnoreCase(processId) && !processId.isEmpty()) {
+                    String processDefId = "";
+                    if (appDef != null) {
+                        WorkflowProcess process = appService.getWorkflowProcessForApp(appDef.getId(), appDef.getVersion().toString(), processId);
+                        processDefId = process.getId();
+                    }
+
+                    Collection<WorkflowParticipant> participantList = workflowManager.getProcessParticipantDefinitionList(processDefId);
+                    for (WorkflowParticipant p : participantList) {
+                        HashMap<String, String> option = new HashMap<>();
+                        option.put("value", p.getId());
+                        option.put("label", p.getName());
+                        jsonArray.put(option);
+                    }
+                }
+                jsonArray.write(response.getWriter());
+            } catch (Exception ex) {
+                LogUtil.error(getClassName(), ex, "Get Process options Error!");
             }
         } else {
             response.setStatus(204);
