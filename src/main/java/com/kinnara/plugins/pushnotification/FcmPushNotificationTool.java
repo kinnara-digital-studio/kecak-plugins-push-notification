@@ -123,11 +123,11 @@ public class FcmPushNotificationTool extends DefaultApplicationPlugin implements
                     .filter(u -> !u.isEmpty())
                     .distinct()
                     .peek(u -> LogUtil.info(getClassName(), "Sending notification for process [" + activityAssignment.getProcessId() + "] to user [" + u + "]"))
-                    .map(u -> {
+                    .map(username -> {
                         try {
                             JSONObject jsonHttpPayload = buildHttpBody(
                                     null,
-                                    "/topics/" + u,
+                                    username,
                                     processDefId,
                                     activityDefId,
                                     activityAssignment.getActivityName(),
@@ -200,7 +200,7 @@ public class FcmPushNotificationTool extends DefaultApplicationPlugin implements
             jsonHtmlPayload.put("to", to);
 
         if(topic != null && !topic.isEmpty())
-            jsonHtmlPayload.put("topic", topic);
+            jsonHtmlPayload.put("to", "/topics/" + topic);
 
         jsonHtmlPayload.put("content_available", true);
 
