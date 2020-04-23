@@ -1,4 +1,4 @@
-package com.kinnara.plugins.pushnotification;
+package com.kinnara.kecakplugins.pushnotification;
 
 import java.util.ArrayList;
 import java.util.Collection;

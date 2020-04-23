@@ -1,4 +1,4 @@
-package com.kinnara.plugins.pushnotification;
+package com.kinnara.kecakplugins.pushnotification;
 
 import com.google.auth.oauth2.GoogleCredentials;
 import com.google.firebase.FirebaseApp;
@@ -15,7 +15,6 @@ import org.joget.apps.app.model.PackageActivityForm;
 import org.joget.apps.app.model.PackageDefinition;
 import org.joget.apps.app.service.AppService;
 import org.joget.apps.app.service.AppUtil;
-import org.joget.apps.form.model.Form;
 import org.joget.commons.util.LogUtil;
 import org.joget.plugin.base.DefaultApplicationPlugin;
 import org.joget.plugin.base.PluginWebSupport;
@@ -42,12 +41,11 @@ public class FcmPushNotificationTool extends DefaultApplicationPlugin implements
     private final static String NOTIFICATION_SERVER = "https://fcm.googleapis.com/fcm/send";
     private final static String CONTENT_TYPE = "application/json";
 
-    private Map<String, Form> formCache = new HashMap<>();
     private static boolean fcmInitialized = false;
 
     @Override
     public String getLabel() {
-        return getName();
+        return "FCM Push Notification Tool";
     }
 
     @Override
@@ -61,7 +59,7 @@ public class FcmPushNotificationTool extends DefaultApplicationPlugin implements
 
     @Override
     public String getName() {
-        return "FCM Push Notification Tool";
+        return getClass().getName();
     }
 
     @Override
@@ -299,22 +297,24 @@ public class FcmPushNotificationTool extends DefaultApplicationPlugin implements
     public void webService(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         boolean isAdmin = WorkflowUtil.isCurrentUserInRole((String)"ROLE_ADMIN");
         if (!isAdmin) {
-            response.sendError(401);
+            response.sendError(HttpServletResponse.SC_UNAUTHORIZED);
             return;
         }
         String action = request.getParameter("action");
-        String appId = request.getParameter("appId");
-        String appVersion = request.getParameter("appVersion");
         ApplicationContext ac = AppUtil.getApplicationContext();
         AppService appService = (AppService)ac.getBean("appService");
         WorkflowManager workflowManager = (WorkflowManager)ac.getBean("workflowManager");
-        AppDefinition appDef = appService.getAppDefinition(appId, appVersion);
+        AppDefinition appDef = AppUtil.getCurrentAppDefinition();
         if ("getProcesses".equals(action)) {
             try {
                 JSONArray jsonArray = new JSONArray();
-                PackageDefinition packageDefinition = appDef.getPackageDefinition();
-                Long packageVersion = packageDefinition != null ? packageDefinition.getVersion() : new Long(1);
-                Collection<WorkflowProcess> processList = workflowManager.getProcessList(appId, packageVersion.toString());
+                Long packageVersion = Optional.of(appDef)
+                        .map(AppDefinition::getPackageDefinition)
+                        .map(PackageDefinition::getVersion)
+                        .map(Long::new)
+                        .orElse(0L);
+
+                Collection<WorkflowProcess> processList = workflowManager.getProcessList(appDef.getAppId(), packageVersion.toString());
                 HashMap<String, String> empty = new HashMap<>();
                 empty.put("value", "");
                 empty.put("label", "");
