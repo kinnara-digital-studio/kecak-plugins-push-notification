@@ -1,0 +1,29 @@
+stages:
+  - build
+
+build-and-deploy:
+  image: kinnaradigitalstudio/kecak-builder
+  stage: build
+  before_script:
+    - 'which ssh-agent || ( apt-get update -y && apt-get install openssh-client -y )'
+    - eval $(ssh-agent -s)
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - '[[ -f /.dockerenv ]] && ssh-keyscan -H "gitlab.com" > ~/.ssh/known_hosts'
+    - git config --global user.email "$GIT_MAIL"
+    - git config --global user.name "$GIT_USERNAME"
+    - cd /root
+    - sh build-core.sh
+    - cd "${CI_PROJECT_DIR}"
+  script: 
+    - mvn clean install
+  artifacts:
+    paths:
+      - ${CI_PROJECT_DIR}/target/*.jar
+    expire_in: 1 day
+  after_script:
+  - mkdir -p ${CI_PROJECT_DIR}/artifacts
+  - cp $CI_PROJECT_DIR/target/*.jar ${CI_PROJECT_DIR}/artifacts
+  - ls -la ${CI_PROJECT_DIR}/artifacts
+  - curl --location --request POST ""${API_URL}"" --header "Authorization:Basic "${KECAK_AUTH}"" --form "pluginFile=@""${CI_PROJECT_DIR}""/artifacts/kecak-plugins-push-notification-1.0.0.jar"
