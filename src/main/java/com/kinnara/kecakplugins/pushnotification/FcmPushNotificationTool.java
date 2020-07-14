@@ -85,13 +85,11 @@ public class FcmPushNotificationTool extends DefaultApplicationPlugin implements
                 }
             }
 
-
             WorkflowAssignment activityAssignment = (WorkflowAssignment) props.get("workflowAssignment");
             if(activityAssignment == null) {
                 LogUtil.warn(getClassName(), "No assignment found");
                 return null;
             }
-
 
             String toParticipantId = getPropertyString("participantId");
             String[] toUserId = getPropertyString("userId").split("[;,]");
@@ -207,6 +205,7 @@ public class FcmPushNotificationTool extends DefaultApplicationPlugin implements
         jsonData.put("message", content);
         jsonData.put("activityName", activityName);
         jsonData.put("activityId", activityId);
+        jsonData.put("activityDefId", activityDefId);
         jsonData.put("processId", processId);
         jsonData.put("processName", processName);
         jsonData.put("appId", appDefinition.getAppId());
