@@ -1,6 +1,6 @@
 stages:
   - build
-
+  - deploy
 build-and-deploy:
   image: kinnaradigitalstudio/kecak-builder
   stage: build
@@ -29,3 +29,15 @@ build-and-deploy:
   - cp $CI_PROJECT_DIR/target/*.jar ${CI_PROJECT_DIR}/artifacts
   - ls -la ${CI_PROJECT_DIR}/artifacts
   - curl --location --request POST ""${API_URL}"" --header "Authorization:Basic "${KECAK_AUTH}"" --form "pluginFile=@""${CI_PROJECT_DIR}""/artifacts/kecak-plugins-push-notification-1.0.0.jar"
+
+upload-to-git-repo:
+  stage: deploy
+  before_script:
+    - 'which ssh-agent || ( apt-get update -y && apt-get install openssh-client -y )'
+    - eval $(ssh-agent -s)
+    - ssh-add <(echo "$SSH_PRIVATE_KEY")
+    - mkdir -p ~/.ssh
+    - '[[ -f /.dockerenv ]] && ssh-keyscan -H "$SERVER_HOSTNAME" > ~/.ssh/known_hosts'
+  script:
+    - scp ${CI_PROJECT_DIR}/target/*.jar $GIT_USERNAME@$SERVER_HOSTNAME:/home/fahmi.mahmud/app_plugins
+    - ssh $GIT_USERNAME@$SERVER_HOSTNAME /home/fahmi.mahmud/upload_plugins.sh
