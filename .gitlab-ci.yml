@@ -1,22 +1,15 @@
 stages:
   - build
   - deploy
-build-and-deploy:
-  image: kinnaradigitalstudio/kecak-builder
+build-plugin:
   stage: build
   tags: 
-    - sandbox
+    - shell
+    - kinnara
   before_script:
-    - 'which ssh-agent || ( apt-get update -y && apt-get install openssh-client -y )'
-    - eval $(ssh-agent -s)
-    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
-    - mkdir -p ~/.ssh
-    - chmod 700 ~/.ssh
-    - '[[ -f /.dockerenv ]] && ssh-keyscan -H "gitlab.com" > ~/.ssh/known_hosts'
-    - git config --global user.email "$GIT_MAIL"
-    - git config --global user.name "$GIT_USERNAME"
-    - cd /root
-    - sh build-core.sh
+    - export GET_BUILD_NUMBER=$(curl -s 'https://sandbox.kecak.org//web/json/build/info' | jq -r '.buildNumber')
+    - cd /home/gitlab-runner/kecak-workflow && git fetch && git checkout $GET_BUILD_NUMBER
+    - cd wflow-app && sh kecak_make.sh
     - cd "${CI_PROJECT_DIR}"
   script: 
     - mvn clean install
@@ -32,12 +25,10 @@ build-and-deploy:
 
 upload-to-git-repo:
   stage: deploy
+  tags:
+    - kinnara
   before_script:
-    - 'which ssh-agent || ( apt-get update -y && apt-get install openssh-client -y )'
-    - eval $(ssh-agent -s)
-    - ssh-add <(echo "$SSH_PRIVATE_KEY")
-    - mkdir -p ~/.ssh
-    - '[[ -f /.dockerenv ]] && ssh-keyscan -H "$SERVER_HOSTNAME" > ~/.ssh/known_hosts'
   script:
-    - scp ${CI_PROJECT_DIR}/target/*.jar $GIT_USERNAME@$SERVER_HOSTNAME:/home/fahmi.mahmud/app_plugins
-    - ssh $GIT_USERNAME@$SERVER_HOSTNAME /home/fahmi.mahmud/upload_plugins.sh
+    - cp ${CI_PROJECT_DIR}/target/*.jar /home/gitlab-runner/app_plugins
+    - cd /home/gitlab-runner
+    - sh upload_plugins.sh
