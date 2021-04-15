@@ -20,54 +20,22 @@
     ]
   },
   {
-
-    "title" : "@@userview.datalistinboxmenu.activity@@",
-    "properties" : [
-      {
-        "name" : "processId",
-        "label" : ",@@userview.datalistinboxmenu.process@@",
-        "type" : "selectbox",
-        "required" : "true",
-        "options_ajax" : "[CONTEXT_PATH]/web/json/app[APP_PATH]/plugin/%s/service?action=getProcesses"
-      },
-      {
-        "name" : "activityDefId",
-        "label" : "@@userview.datalistinboxmenu.activity@@",
-        "type" : "selectbox",
-        "required" : "true",
-        "options_ajax_on_change" : "processId",
-        "options_ajax" : "[CONTEXT_PATH]/web/json/app[APP_PATH]/plugin/%s/service?action=getActivities"
-      }
-    ]
-  },
-  {
     "title" : "@@pushNotification.notification@@",
     "properties" : [
       {
-        "name" : "participantId",
-        "label" : "@@pushNotification.participantId@@",
-        "type" : "multiselect",
-        "options_ajax_on_change" : "processId",
-        "options_ajax" : "[CONTEXT_PATH]/web/json/app[APP_PATH]/plugin/%s/service?action=getParticipants"
-      },
-      {
-        "name": "userId",
-        "label" : "@@pushNotification.userId@@",
-        "type" : "multiselect",
-        "options_ajax" : "[CONTEXT_PATH]/web/json/plugin/org.joget.apps.userview.lib.UserPermission/service?action=getUsers"
-      },
-      {
         "name" : "notificationTitle",
         "label" : "@@pushNotification.notificationTitle@@",
+        "description": "@@pushNotification.notificationTitle.desc@@",
         "required" : "true",
         "type" : "textfield",
-        "value" : "New Inbox"
+        "value" : "Inbox ${activity.name}"
       },
       {
         "name" : "notificationContent",
         "label" : "@@pushNotification.notificationContent@@",
+        "description": "@@pushNotification.notificationContent.desc@@",
         "type" : "textarea",
-        "value" : "From : #assignment.processRequesterId#"
+        "value" : ""
       },
       {
         "name" : "debug",
@@ -77,6 +45,19 @@
           "value":"true",
           "label":""
         }]
+      }
+    ]
+  },
+  {
+    "title": "Participant",
+    "properties": [
+      {
+        "name" : "participantPlugin",
+        "label" :"@@pushNotification.participantPlugin@@",
+        "type" : "elementselect",
+        "required" :"true",
+        "options_ajax" : "[CONTEXT_PATH]/web/property/json/getElements?classname=org.joget.workflow.model.ParticipantPlugin",
+        "url" : "[CONTEXT_PATH]/web/property/json[APP_PATH]/getPropertyOptions"
       }
     ]
   }
