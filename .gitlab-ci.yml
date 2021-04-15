@@ -1,0 +1,34 @@
+stages:
+  - build
+  - deploy
+build-plugin:
+  stage: build
+  tags: 
+    - shell
+    - kinnara
+  before_script:
+    - export GET_BUILD_NUMBER=$(curl -s 'https://sandbox.kecak.org//web/json/build/info' | jq -r '.buildNumber')
+    - cd /home/gitlab-runner/kecak-workflow && git fetch && git checkout $GET_BUILD_NUMBER
+    - cd wflow-app && sh kecak_make.sh
+    - cd "${CI_PROJECT_DIR}"
+  script: 
+    - mvn clean install
+  artifacts:
+    paths:
+      - ${CI_PROJECT_DIR}/target/*.jar
+    expire_in: 1 day
+  after_script:
+  - mkdir -p ${CI_PROJECT_DIR}/artifacts
+  - cp $CI_PROJECT_DIR/target/*.jar ${CI_PROJECT_DIR}/artifacts
+  - ls -la ${CI_PROJECT_DIR}/artifacts
+  - curl --location --request POST ""${API_URL}"" --header "Authorization:Basic "${KECAK_AUTH}"" --form "pluginFile=@""${CI_PROJECT_DIR}""/artifacts/kecak-plugins-push-notification-1.0.0.jar"
+
+upload-to-git-repo:
+  stage: deploy
+  tags:
+    - kinnara
+  before_script:
+  script:
+    - cp ${CI_PROJECT_DIR}/target/*.jar /home/gitlab-runner/app_plugins
+    - cd /home/gitlab-runner
+    - sh upload_plugins.sh
