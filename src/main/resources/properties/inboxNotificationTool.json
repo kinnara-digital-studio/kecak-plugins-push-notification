@@ -3,19 +3,8 @@
     "title" : "@@pushNotification.fcmConfiguration@@",
     "properties" : [
       {
-        "name": "useRestDriver",
-        "label": "User REST Driver",
-        "type": "checkbox",
-        "options": [
-          {
-            "value": "true",
-            "label": ""
-          }
-        ]
-      },
-      {
         "name": "fcmDatabaseUrl",
-        "label": "Database URL",
+        "label": "@@pushNotification.fcmDatabaseUrl@@",
         "required": "true",
         "value": "https://kecak-mobile.firebaseio.com",
         "type": "textfield"

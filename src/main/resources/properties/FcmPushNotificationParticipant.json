@@ -4,7 +4,7 @@
     "properties" : [
       {
         "name": "fcmDatabaseUrl",
-        "label": "Database URL",
+        "label": "@@pushNotification.fcmDatabaseUrl@@",
         "required": "true",
         "value": "https://kecak-mobile.firebaseio.com",
         "type": "textfield"
