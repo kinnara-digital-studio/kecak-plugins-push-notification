@@ -4,24 +4,20 @@ import com.kinnara.kecakplugins.pushnotification.commons.FcmPushNotificationMixi
 import com.kinnarastudio.commons.Try;
 import org.apache.http.HttpResponse;
 import org.apache.http.StatusLine;
-import org.apache.http.client.methods.CloseableHttpResponse;
-import org.apache.http.client.methods.HttpPost;
-import org.apache.http.entity.StringEntity;
-import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClientBuilder;
 import org.joget.apps.app.model.AppDefinition;
 import org.joget.apps.app.model.PackageDefinition;
 import org.joget.apps.app.service.AppService;
 import org.joget.apps.app.service.AppUtil;
-import org.joget.apps.form.model.Form;
 import org.joget.commons.util.LogUtil;
 import org.joget.plugin.base.DefaultApplicationPlugin;
+import org.joget.plugin.base.PluginManager;
 import org.joget.plugin.base.PluginWebSupport;
 import org.joget.workflow.model.WorkflowActivity;
 import org.joget.workflow.model.WorkflowAssignment;
 import org.joget.workflow.model.WorkflowParticipant;
 import org.joget.workflow.model.WorkflowProcess;
 import org.joget.workflow.model.service.WorkflowManager;
+import org.joget.workflow.model.service.WorkflowUserManager;
 import org.joget.workflow.util.WorkflowUtil;
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -31,17 +27,12 @@ import org.springframework.context.ApplicationContext;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class FcmPushNotificationTool extends DefaultApplicationPlugin implements PluginWebSupport, FcmPushNotificationMixin {
-    private final static String NOTIFICATION_SERVER = "https://fcm.googleapis.com/fcm/send";
-    private final static String CONTENT_TYPE = "application/json";
-
     private static boolean fcmInitialized = false;
 
     @Override
@@ -76,21 +67,22 @@ public class FcmPushNotificationTool extends DefaultApplicationPlugin implements
 
     @Override
     public Object execute(Map props) {
+        final PluginManager pluginManager = (PluginManager) props.get("pluginManager");
+        final WorkflowManager workflowManager = (WorkflowManager) pluginManager.getBean("workflowManager");
+        final WorkflowUserManager workflowUserManager = (WorkflowUserManager) pluginManager.getBean("workflowUserManager");
+
         ClassLoader originalClassLoader = Thread.currentThread().getContextClassLoader();
         try {
+            String databaseUrl = props.get("fcmDatabaseUrl").toString();
+            JSONObject jsonPrivateKey = new JSONObject(props.get("jsonPrivateKey").toString());
+
             if (!fcmInitialized) {
-                try {
-                    String databaseUrl = props.get("fcmDatabaseUrl").toString();
-                    JSONObject jsonPrivateKey = new JSONObject(props.get("jsonPrivateKey").toString());
-                    initializeSdk(databaseUrl, jsonPrivateKey);
-                    fcmInitialized = true;
-                } catch (IOException | JSONException e) {
-                    LogUtil.error(getClassName(), e, "error initializing firebase");
-                }
+                initializeSdk(databaseUrl, jsonPrivateKey);
+                fcmInitialized = true;
             }
 
-            WorkflowAssignment activityAssignment = (WorkflowAssignment) props.get("workflowAssignment");
-            if (activityAssignment == null) {
+            WorkflowAssignment workflowAssignment = (WorkflowAssignment) props.get("workflowAssignment");
+            if (workflowAssignment == null) {
                 LogUtil.warn(getClassName(), "No assignment found");
                 return null;
             }
@@ -98,66 +90,67 @@ public class FcmPushNotificationTool extends DefaultApplicationPlugin implements
             String toParticipantId = getPropertyString("participantId");
             String[] toUserId = getPropertyString("userId").split("[;,]");
 
-            final String processDefId = getPropertyString("processId");
-            final String activityDefId = getPropertyString("activityDefId");
+            final String authorization = props.get("authorization").toString();
+            final String title = props.get("notificationTitle").toString();
+            final String content = props.get("notificationContent").toString();
+            final String processId = workflowAssignment.getProcessId();
 
-            List<String> assignmentUsers = Arrays.stream(toParticipantId.split("[,;]"))
+            Set<String> assignmentUsers = Arrays.stream(toParticipantId.split("[,;]"))
                     .map(String::trim)
                     .filter(p -> !p.isEmpty())
                     .map(p -> WorkflowUtil.getAssignmentUsers(
-                            WorkflowUtil.getProcessDefPackageId(activityAssignment.getProcessDefId()),
-                            activityAssignment.getProcessDefId(),
-                            activityAssignment.getProcessId(),
-                            activityAssignment.getProcessVersion(),
-                            activityAssignment.getActivityId(),
+
+                            WorkflowUtil.getProcessDefPackageId(workflowAssignment.getProcessDefId()),
+                            workflowAssignment.getProcessDefId(),
+                            workflowAssignment.getProcessId(),
+                            workflowAssignment.getProcessVersion(),
+                            workflowAssignment.getActivityId(),
                             "",
                             p
                     ))
                     .filter(Objects::nonNull)
                     .flatMap(Collection::stream)
-                    .distinct()
-                    .collect(Collectors.toList());
+                    .collect(Collectors.toSet());
 
-            long notificationCount = Stream.concat(assignmentUsers.stream(), Arrays.stream(toUserId))
-                    .filter(Objects::nonNull)
-                    .filter(u -> !u.isEmpty())
-                    .distinct()
-                    .peek(u -> LogUtil.info(getClassName(), "Sending notification for process [" + activityAssignment.getProcessId() + "] to user [" + u + "]"))
-                    .map(username -> {
-                        try {
+            new Thread(Try.onRunnable(() -> {
+                Thread.sleep(3000);
+
+                long notificationCount = Stream.concat(assignmentUsers.stream(), Arrays.stream(toUserId))
+                        .filter(Objects::nonNull)
+                        .filter(u -> !u.isEmpty())
+                        .distinct()
+                        .filter(Try.onPredicate(username -> {
+                            workflowUserManager.setCurrentThreadUser(username);
+
+                            // should this be filtered by activityDefId ????
+                            final WorkflowAssignment activityAssignment = workflowManager.getAssignmentByProcess(processId);
+
                             JSONObject jsonHttpPayload = buildHttpBody(
                                     null,
                                     username,
-                                    processDefId,
-                                    activityDefId,
-                                    activityAssignment.getActivityName(),
-                                    activityAssignment.getActivityId(),
-                                    activityAssignment.getProcessId(),
-                                    activityAssignment.getProcessName(),
-                                    AppUtil.processHashVariable(getPropertyString("notificationTitle"), activityAssignment, null, null),
-                                    AppUtil.processHashVariable(getPropertyString("notificationContent"), activityAssignment, null, null),
+                                    title,
+                                    content,
                                     activityAssignment);
 
-                            HttpResponse response = pushNotification(jsonHttpPayload);
+                            boolean debug = "true".equalsIgnoreCase(getPropertyString("debug"));
+
+                            LogUtil.info(getClassName(), "Sending notification for process [" + processId + "] to user [" + username + "]");
+
+                            HttpResponse response = triggerPushNotification(authorization, jsonHttpPayload, debug);
 
                             // return true when status = 200
-                            return Optional
-                                    .ofNullable(response)
+                            return Optional.ofNullable(response)
                                     .map(HttpResponse::getStatusLine)
                                     .map(StatusLine::getStatusCode)
                                     .orElse(0) == 200;
-                        } catch (IOException | JSONException e) {
-                            LogUtil.error(getClassName(), e, e.getMessage());
-                        }
+                        }))
+                        .count();
 
-                        return false;
-                    })
-                    .filter(b -> b)
-                    .count();
+                if (notificationCount == 0) {
+                    LogUtil.warn(getClassName(), "Nobody received tbe notification");
+                }
 
-            if (notificationCount == 0) {
-                LogUtil.warn(getClassName(), "Nobody received tbe notification");
-            }
+            })).start();
 
 //            // push to specific device Id
 //            Optional.ofNullable(getPropertyString("to"))
@@ -185,83 +178,7 @@ public class FcmPushNotificationTool extends DefaultApplicationPlugin implements
 //                            LogUtil.error(getClassName(), e, e.getMessage());
 //                        }
 //                    });
-        } finally {
-            Thread.currentThread().setContextClassLoader(originalClassLoader);
-        }
-
-        return null;
-    }
-
-    private JSONObject buildHttpBody(String to, String topic, String processDefId, String activityDefId, String activityName, String activityId, String processId, String processName, String title, String content, WorkflowAssignment wfAssignment) throws JSONException {
-        AppDefinition appDefinition = AppUtil.getCurrentAppDefinition();
-
-        JSONObject jsonHtmlPayload = new JSONObject();
-        if (to != null && !to.isEmpty())
-            jsonHtmlPayload.put("to", to);
-
-        if (topic != null && !topic.isEmpty())
-            jsonHtmlPayload.put("to", "/topics/" + topic);
-
-        jsonHtmlPayload.put("content_available", true);
-
-        JSONObject jsonData = new JSONObject();
-        jsonData.put("title", title);
-        jsonData.put("message", content);
-        jsonData.put("activityName", activityName);
-        jsonData.put("activityId", activityId);
-        jsonData.put("activityDefId", activityDefId);
-        jsonData.put("processId", processId);
-        jsonData.put("processName", processName);
-        jsonData.put("appId", appDefinition.getAppId());
-        jsonData.put("appVersion", appDefinition.getVersion());
-
-        Optional<Form> optForm = getFormFromActivity(processDefId, activityDefId);
-        optForm.ifPresent(Try.onConsumer(f -> jsonData.put("formId", f.getPropertyString("id"))));
-
-        jsonData.put("click_action", "FLUTTER_NOTIFICATION_CLICK");
-        jsonHtmlPayload.put("data", jsonData);
-
-        JSONObject jsonNotification = new JSONObject();
-        jsonNotification.put("title", title);
-        jsonNotification.put("body", content);
-        jsonHtmlPayload.put("notification", jsonNotification);
-
-        return jsonHtmlPayload;
-    }
-
-    /**
-     * Trigger Notification
-     *
-     * @param data
-     * @return
-     * @throws IOException
-     */
-    private HttpResponse pushNotification(JSONObject data) throws IOException {
-        boolean debug = "true".equalsIgnoreCase(getPropertyString("debug"));
-
-        if (debug) {
-            LogUtil.info(getClassName(), "Request Payload [" + data.toString() + "]");
-        }
-
-        ClassLoader originalClassLoader = Thread.currentThread().getContextClassLoader();
-        Thread.currentThread().setContextClassLoader(this.getClass().getClassLoader());
-
-        HttpPost request = new HttpPost(NOTIFICATION_SERVER);
-        request.addHeader("Content-Type", CONTENT_TYPE);
-        request.addHeader("Authorization", "key=" + getPropertyString("authorization"));
-        request.setEntity(new StringEntity(data.toString()));
-
-        try (CloseableHttpClient client = HttpClientBuilder.create().build();
-             CloseableHttpResponse response = client.execute(request)) {
-
-            if (debug) {
-                try (BufferedReader br = new BufferedReader(new InputStreamReader(response.getEntity().getContent()))) {
-                    LogUtil.info(getClassName(), "Response Payload [" + br.lines().collect(Collectors.joining()) + "]");
-                }
-            }
-
-            return response;
-        } catch (Exception e) {
+        } catch (JSONException | IOException e) {
             LogUtil.error(getClassName(), e, e.getMessage());
         } finally {
             Thread.currentThread().setContextClassLoader(originalClassLoader);

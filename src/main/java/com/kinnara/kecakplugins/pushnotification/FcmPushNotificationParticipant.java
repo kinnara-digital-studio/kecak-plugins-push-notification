@@ -76,7 +76,7 @@ public class FcmPushNotificationParticipant extends DefaultParticipantPlugin imp
                                         notificationTitle,
                                         notificationContent);
 
-                                HttpResponse pushNotificationResponse = pushNotification(authorization, jsonHttpPayload, true);
+                                HttpResponse pushNotificationResponse = triggerPushNotification(authorization, jsonHttpPayload, true);
 
                                 // return true when status = 200
                                 return Optional

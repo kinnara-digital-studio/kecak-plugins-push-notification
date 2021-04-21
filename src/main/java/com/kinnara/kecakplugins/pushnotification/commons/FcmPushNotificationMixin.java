@@ -3,6 +3,7 @@ package com.kinnara.kecakplugins.pushnotification.commons;
 import com.google.auth.oauth2.GoogleCredentials;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.FirebaseOptions;
+import com.kinnarastudio.commons.Try;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpPost;
@@ -15,19 +16,18 @@ import org.joget.apps.app.model.PackageActivityForm;
 import org.joget.apps.app.service.AppService;
 import org.joget.apps.app.service.AppUtil;
 import org.joget.apps.form.model.Form;
+import org.joget.apps.form.model.FormData;
 import org.joget.commons.util.LogUtil;
 import org.joget.workflow.model.WorkflowActivity;
 import org.joget.workflow.model.WorkflowAssignment;
 import org.joget.workflow.model.service.WorkflowManager;
+import org.joget.workflow.util.WorkflowUtil;
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.springframework.context.ApplicationContext;
 
 import javax.annotation.Nonnull;
-import java.io.BufferedReader;
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.lang.reflect.Method;
 import java.util.Optional;
 import java.util.regex.Matcher;
@@ -58,22 +58,21 @@ public interface FcmPushNotificationMixin {
      * @return
      * @throws IOException
      */
-    default HttpResponse pushNotification(String authorization, JSONObject data, boolean debug) throws IOException {
+    default HttpResponse triggerPushNotification(String authorization, JSONObject data, boolean debug) throws IOException {
         if(debug) {
             LogUtil.info(getClass().getName(), "Request Payload ["+data.toString()+"]");
         }
 
-        HttpPost request = new HttpPost(NOTIFICATION_SERVER);
-        request.addHeader("Content-Type", CONTENT_TYPE);
-        request.addHeader("Authorization", "key=" + authorization);
-        request.setEntity(new StringEntity(data.toString()));
+        HttpPost request = getFcmRequest(authorization, data);
 
         try(CloseableHttpClient client = HttpClientBuilder.create().build();
             CloseableHttpResponse response = client.execute(request)) {
 
             if (debug) {
                 try (BufferedReader br = new BufferedReader(new InputStreamReader(response.getEntity().getContent()))) {
-                    LogUtil.info(getClass().getName(), "Response Payload [" + br.lines().collect(Collectors.joining()) + "]");
+                    if(debug) {
+                        LogUtil.info(getClass().getName(), "Response Payload [" + br.lines().collect(Collectors.joining()) + "]");
+                    }
                 }
             }
 
@@ -90,12 +89,13 @@ public interface FcmPushNotificationMixin {
         WorkflowManager workflowManager = (WorkflowManager) applicationContext.getBean("workflowManager");
         WorkflowActivity info = workflowManager.getRunningActivityInfo(assignment.getActivityId());
 
-        String formDefId = getFormFromActivity(info.getProcessDefId(), info.getActivityDefId()).map(f -> f.getPropertyString("id")).orElse("");
+        String formDefId = getApplicationDefinition(assignment).flatMap(def -> getFormFromActivity(def, info.getProcessDefId(), info.getActivityDefId())).map(f -> f.getPropertyString("id")).orElse("");
         return getNotificationPayload(to, topic, assignment.getProcessId(), info.getProcessName(), assignment.getActivityId(), info.getName(), formDefId, notificationTitle, notificationContent);
     }
 
     default JSONObject getNotificationPayload(String to, String topic, WorkflowActivity activity, String notificationTitle, String notificationContent) throws JSONException {
-        String formDefId = getFormFromActivity(activity.getProcessDefId(), activity.getActivityDefId()).map(f -> f.getPropertyString("id")).orElse("");
+        AppDefinition appDefinition = AppUtil.getCurrentAppDefinition();
+        String formDefId = getFormFromActivity(appDefinition, activity.getProcessDefId(), activity.getActivityDefId()).map(f -> f.getPropertyString("id")).orElse("");
         return getNotificationPayload(to, topic, activity.getProcessId(), activity.getProcessName(), activity.getId(), activity.getName(), formDefId, notificationTitle, notificationContent);
     }
 
@@ -145,17 +145,68 @@ public interface FcmPushNotificationMixin {
         return jsonHtmlPayload;
     }
 
+    default Optional<Form> getFormFromAssignment(WorkflowAssignment workflowAssignment) {
+        AppService appService = (AppService) AppUtil.getApplicationContext().getBean("appService");
+
+        // get application definition
+        @Nonnull Optional<AppDefinition> optAppDefinition = getApplicationDefinition(workflowAssignment);
+
+        FormData formData = new FormData();
+        formData.setActivityId(workflowAssignment.getActivityId());
+        formData.setProcessId(workflowAssignment.getProcessId());
+
+        final Optional<Form> optForm = optAppDefinition.map(def -> appService.viewAssignmentForm(def, workflowAssignment, formData, ""))
+                .map(PackageActivityForm::getForm)
+                .filter(f -> isAuthorize(f, formData));
+
+        return optForm;
+    }
+
+    /**
+     * Check form authorization
+     * Restrict if no permission is set and user is anonymous
+     *
+     * @param form
+     * @param formData
+     * @return
+     */
+    default boolean isAuthorize(@Nonnull Form form, FormData formData) {
+        return (form.getProperty("permission") != null || !WorkflowUtil.isCurrentUserAnonymous())
+                && form.isAuthorize(formData);
+    }
+
+    /**
+     * Attempt to get app definition using activity ID or process ID
+     *
+     * @param assignment
+     * @return
+     */
+    @Nonnull
+    default Optional<AppDefinition> getApplicationDefinition(@Nonnull WorkflowAssignment assignment) {
+        AppService appService = (AppService) AppUtil.getApplicationContext().getBean("appService");
+
+        final String activityId = assignment.getActivityId();
+        final String processId = assignment.getProcessId();
+
+        AppDefinition appDefinition = Optional.of(activityId)
+                .map(appService::getAppDefinitionForWorkflowActivity)
+                .orElseGet(() -> Optional.of(processId)
+                        .map(appService::getAppDefinitionForWorkflowProcess)
+                        .orElse(null));
+
+        return Optional.ofNullable(appDefinition);
+    }
+
     /**
      * Get Form from Activity
      * @param processDefId
      * @param activityDefId
      * @return
      */
-    default Optional<Form> getFormFromActivity(String processDefId, String activityDefId) {
+    default Optional<Form> getFormFromActivity(AppDefinition appDefinition, String processDefId, String activityDefId) {
         if(activityDefId == null)
             return Optional.empty();
 
-        AppDefinition appDefinition = AppUtil.getCurrentAppDefinition();
         AppService appService = (AppService) AppUtil.getApplicationContext().getBean("appService");
         PackageActivityForm packageActivityForm = appService.retrieveMappedForm(appDefinition.getAppId(), String.valueOf(appDefinition.getVersion()), processDefId, activityDefId);
         return Optional.ofNullable(packageActivityForm).map(PackageActivityForm::getForm);
@@ -197,5 +248,57 @@ public interface FcmPushNotificationMixin {
 
         codeMatcher.appendTail(sb);
         return sb.toString();
+    }
+
+    @Nonnull
+    default HttpPost getFcmRequest(String fcmAuthorization, JSONObject fcmPayload) throws UnsupportedEncodingException {
+        HttpPost request = new HttpPost(NOTIFICATION_SERVER);
+        request.addHeader("Content-Type", CONTENT_TYPE);
+        request.addHeader("Authorization", "key=" + fcmAuthorization);
+        request.setEntity(new StringEntity(fcmPayload.toString()));
+        return request;
+    }
+
+    default JSONObject buildHttpBody(final String to, final String topic, final String title, final String content, final WorkflowAssignment wfAssignment) throws JSONException {
+        WorkflowManager workflowManager = (WorkflowManager) AppUtil.getApplicationContext().getBean("workflowManager");
+
+        JSONObject jsonHtmlPayload = new JSONObject();
+        if (to != null && !to.isEmpty())
+            jsonHtmlPayload.put("to", to);
+
+        if (topic != null && !topic.isEmpty())
+            jsonHtmlPayload.put("to", "/topics/" + topic);
+
+        jsonHtmlPayload.put("content_available", true);
+
+        JSONObject jsonData = new JSONObject();
+        jsonData.put("title", title);
+        jsonData.put("message", content);
+
+        if(wfAssignment != null) {
+            WorkflowActivity info = workflowManager.getRunningActivityInfo(wfAssignment.getActivityId());
+            if(info != null) {
+                jsonData.put("activityDefId", info.getActivityDefId());
+                jsonData.put("processDefId", info.getProcessDefId());
+            }
+
+            jsonData.put("activityName", wfAssignment.getActivityName());
+            jsonData.put("activityId", wfAssignment.getActivityId());
+            jsonData.put("processId", wfAssignment.getProcessId());
+            jsonData.put("processName", wfAssignment.getProcessName());
+        }
+
+        Optional<Form> optForm = getFormFromAssignment(wfAssignment);
+        optForm.ifPresent(Try.onConsumer(f -> jsonData.put("formId", f.getPropertyString("id"))));
+
+        jsonData.put("click_action", "FLUTTER_NOTIFICATION_CLICK");
+        jsonHtmlPayload.put("data", jsonData);
+
+        JSONObject jsonNotification = new JSONObject();
+        jsonNotification.put("title", title);
+        jsonNotification.put("body", content);
+        jsonHtmlPayload.put("notification", jsonNotification);
+
+        return jsonHtmlPayload;
     }
 }
