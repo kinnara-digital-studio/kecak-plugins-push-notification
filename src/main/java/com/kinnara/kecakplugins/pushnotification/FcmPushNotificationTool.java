@@ -1,8 +1,7 @@
 package com.kinnara.kecakplugins.pushnotification;
 
-import com.google.auth.oauth2.GoogleCredentials;
-import com.google.firebase.FirebaseApp;
-import com.google.firebase.FirebaseOptions;
+import com.kinnara.kecakplugins.pushnotification.commons.FcmPushNotificationMixin;
+import com.kinnarastudio.commons.Try;
 import org.apache.http.HttpResponse;
 import org.apache.http.StatusLine;
 import org.apache.http.client.methods.CloseableHttpResponse;
@@ -11,10 +10,10 @@ import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.joget.apps.app.model.AppDefinition;
-import org.joget.apps.app.model.PackageActivityForm;
 import org.joget.apps.app.model.PackageDefinition;
 import org.joget.apps.app.service.AppService;
 import org.joget.apps.app.service.AppUtil;
+import org.joget.apps.form.model.Form;
 import org.joget.commons.util.LogUtil;
 import org.joget.plugin.base.DefaultApplicationPlugin;
 import org.joget.plugin.base.PluginWebSupport;
@@ -32,12 +31,14 @@ import org.springframework.context.ApplicationContext;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public class FcmPushNotificationTool extends DefaultApplicationPlugin implements PluginWebSupport {
+public class FcmPushNotificationTool extends DefaultApplicationPlugin implements PluginWebSupport, FcmPushNotificationMixin {
     private final static String NOTIFICATION_SERVER = "https://fcm.googleapis.com/fcm/send";
     private final static String CONTENT_TYPE = "application/json";
 
@@ -55,11 +56,12 @@ public class FcmPushNotificationTool extends DefaultApplicationPlugin implements
 
     @Override
     public String getPropertyOptions() {
-        return AppUtil.readPluginResource(this.getClass().getName(), "/properties/inboxNotificationTool.json", new String[] {getClassName(), getClassName(), getClassName()}, true, "message/inboxNotificationTool");}
+        return AppUtil.readPluginResource(this.getClass().getName(), "/properties/inboxNotificationTool.json", new String[]{getClassName(), getClassName(), getClassName()}, true, "message/inboxNotificationTool");
+    }
 
     @Override
     public String getName() {
-        return getClass().getName();
+        return getLabel() + getVersion();
     }
 
     @Override
@@ -78,15 +80,17 @@ public class FcmPushNotificationTool extends DefaultApplicationPlugin implements
         try {
             if (!fcmInitialized) {
                 try {
-                    initializeSdk();
+                    String databaseUrl = props.get("fcmDatabaseUrl").toString();
+                    JSONObject jsonPrivateKey = new JSONObject(props.get("jsonPrivateKey").toString());
+                    initializeSdk(databaseUrl, jsonPrivateKey);
                     fcmInitialized = true;
-                } catch (IOException e) {
+                } catch (IOException | JSONException e) {
                     LogUtil.error(getClassName(), e, "error initializing firebase");
                 }
             }
 
             WorkflowAssignment activityAssignment = (WorkflowAssignment) props.get("workflowAssignment");
-            if(activityAssignment == null) {
+            if (activityAssignment == null) {
                 LogUtil.warn(getClassName(), "No assignment found");
                 return null;
             }
@@ -151,7 +155,7 @@ public class FcmPushNotificationTool extends DefaultApplicationPlugin implements
                     .filter(b -> b)
                     .count();
 
-            if(notificationCount == 0) {
+            if (notificationCount == 0) {
                 LogUtil.warn(getClassName(), "Nobody received tbe notification");
             }
 
@@ -188,14 +192,14 @@ public class FcmPushNotificationTool extends DefaultApplicationPlugin implements
         return null;
     }
 
-    private JSONObject buildHttpBody(String to, String topic, String processDefId, String activityDefId, String activityName, String activityId, String processId, String processName, String title, String content, WorkflowAssignment wfAssignment)throws JSONException {
+    private JSONObject buildHttpBody(String to, String topic, String processDefId, String activityDefId, String activityName, String activityId, String processId, String processName, String title, String content, WorkflowAssignment wfAssignment) throws JSONException {
         AppDefinition appDefinition = AppUtil.getCurrentAppDefinition();
 
         JSONObject jsonHtmlPayload = new JSONObject();
-        if(to != null && !to.isEmpty())
+        if (to != null && !to.isEmpty())
             jsonHtmlPayload.put("to", to);
 
-        if(topic != null && !topic.isEmpty())
+        if (topic != null && !topic.isEmpty())
             jsonHtmlPayload.put("to", "/topics/" + topic);
 
         jsonHtmlPayload.put("content_available", true);
@@ -210,7 +214,10 @@ public class FcmPushNotificationTool extends DefaultApplicationPlugin implements
         jsonData.put("processName", processName);
         jsonData.put("appId", appDefinition.getAppId());
         jsonData.put("appVersion", appDefinition.getVersion());
-        jsonData.put("formId", getFormFromActivity(processDefId, activityDefId));
+
+        Optional<Form> optForm = getFormFromActivity(processDefId, activityDefId);
+        optForm.ifPresent(Try.onConsumer(f -> jsonData.put("formId", f.getPropertyString("id"))));
+
         jsonData.put("click_action", "FLUTTER_NOTIFICATION_CLICK");
         jsonHtmlPayload.put("data", jsonData);
 
@@ -223,22 +230,6 @@ public class FcmPushNotificationTool extends DefaultApplicationPlugin implements
     }
 
     /**
-     * Get Form from Activity
-     * @param processDefId
-     * @param activityDefId
-     * @return
-     */
-    private String getFormFromActivity(String processDefId, String activityDefId) {
-        if(activityDefId == null)
-            return null;
-
-        AppDefinition appDefinition = AppUtil.getCurrentAppDefinition();
-        AppService appService = (AppService) AppUtil.getApplicationContext().getBean("appService");
-        PackageActivityForm packageActivityForm = appService.retrieveMappedForm(appDefinition.getAppId(), String.valueOf(appDefinition.getVersion()), processDefId, activityDefId);
-        return packageActivityForm == null ? null : packageActivityForm.getFormId();
-    }
-
-    /**
      * Trigger Notification
      *
      * @param data
@@ -248,8 +239,8 @@ public class FcmPushNotificationTool extends DefaultApplicationPlugin implements
     private HttpResponse pushNotification(JSONObject data) throws IOException {
         boolean debug = "true".equalsIgnoreCase(getPropertyString("debug"));
 
-        if(debug) {
-            LogUtil.info(getClassName(), "Request Payload ["+data.toString()+"]");
+        if (debug) {
+            LogUtil.info(getClassName(), "Request Payload [" + data.toString() + "]");
         }
 
         ClassLoader originalClassLoader = Thread.currentThread().getContextClassLoader();
@@ -260,8 +251,8 @@ public class FcmPushNotificationTool extends DefaultApplicationPlugin implements
         request.addHeader("Authorization", "key=" + getPropertyString("authorization"));
         request.setEntity(new StringEntity(data.toString()));
 
-        try(CloseableHttpClient client = HttpClientBuilder.create().build();
-            CloseableHttpResponse response = client.execute(request)) {
+        try (CloseableHttpClient client = HttpClientBuilder.create().build();
+             CloseableHttpResponse response = client.execute(request)) {
 
             if (debug) {
                 try (BufferedReader br = new BufferedReader(new InputStreamReader(response.getEntity().getContent()))) {
@@ -279,30 +270,17 @@ public class FcmPushNotificationTool extends DefaultApplicationPlugin implements
         return null;
     }
 
-    private void initializeSdk() throws IOException {
-        FirebaseOptions options = new FirebaseOptions.Builder()
-                .setCredentials(GoogleCredentials.fromStream(getServiceAccount()))
-                .setDatabaseUrl("https://kecak-mobile.firebaseio.com")
-                .build();
-
-        FirebaseApp.initializeApp(options);
-    }
-
-    private InputStream getServiceAccount() {
-        return new ByteArrayInputStream(getPropertyString("jsonPrivateKey").getBytes());
-    }
-
     @Override
     public void webService(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        boolean isAdmin = WorkflowUtil.isCurrentUserInRole((String)"ROLE_ADMIN");
+        boolean isAdmin = WorkflowUtil.isCurrentUserInRole((String) "ROLE_ADMIN");
         if (!isAdmin) {
             response.sendError(HttpServletResponse.SC_UNAUTHORIZED);
             return;
         }
         String action = request.getParameter("action");
         ApplicationContext ac = AppUtil.getApplicationContext();
-        AppService appService = (AppService)ac.getBean("appService");
-        WorkflowManager workflowManager = (WorkflowManager)ac.getBean("workflowManager");
+        AppService appService = (AppService) ac.getBean("appService");
+        WorkflowManager workflowManager = (WorkflowManager) ac.getBean("workflowManager");
         AppDefinition appDef = AppUtil.getCurrentAppDefinition();
         if ("getProcesses".equals(action)) {
             try {
@@ -325,8 +303,7 @@ public class FcmPushNotificationTool extends DefaultApplicationPlugin implements
                     jsonArray.put(option);
                 }
                 jsonArray.write(response.getWriter());
-            }
-            catch (Exception ex) {
+            } catch (Exception ex) {
                 LogUtil.error(getClassName(), ex, "Get Process options Error!");
             }
         } else if ("getActivities".equals(action)) {
@@ -356,7 +333,7 @@ public class FcmPushNotificationTool extends DefaultApplicationPlugin implements
             } catch (Exception ex) {
                 LogUtil.error(getClass().getName(), ex, "Get activity options Error!");
             }
-        } else if("getParticipants".equals(action)) {
+        } else if ("getParticipants".equals(action)) {
             try {
                 JSONArray jsonArray = new JSONArray();
                 HashMap<String, String> empty = new HashMap<String, String>();

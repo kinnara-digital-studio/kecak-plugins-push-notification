@@ -71,13 +71,14 @@ public class FcmPushNotificationApi extends DefaultApplicationPlugin implements 
 
     @Override
     public void webService(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        LogUtil.info(getClass().getName(), "Executing Rest API [" + request.getRequestURI() + "] in method [" + request.getMethod() + "] contentType ["+ request.getContentType() + "] as [" + WorkflowUtil.getCurrentUsername() + "]");
+        LogUtil.info(getClass().getName(), "Executing Rest API [" + request.getRequestURI() + "] in method [" + request.getMethod() + "] contentType [" + request.getContentType() + "] as [" + WorkflowUtil.getCurrentUsername() + "]");
 
         try {
             JSONObject jsonBody = getRequestBody(request);
-            if(!fcmInitialized) {
+            if (!fcmInitialized) {
+                String databaseUrl = "https://kecak-mobile.firebaseio.com";
                 JSONObject privateKey = getRequiredJsonBodyContent(jsonBody, "jsonPrivateKey");
-                initializeSdk(privateKey);
+                initializeSdk(databaseUrl, privateKey);
                 fcmInitialized = true;
             }
 
@@ -121,7 +122,7 @@ public class FcmPushNotificationApi extends DefaultApplicationPlugin implements 
                     .peek(u -> LogUtil.info(getClassName(), "Notification for process [" + assignment.getProcessId() + "] to user [" + u + "] has been sent"))
                     .count();
 
-            if(notificationCount == 0) {
+            if (notificationCount == 0) {
                 throw new ApiException(HttpServletResponse.SC_BAD_REQUEST, "No notification has been sent");
             }
 
@@ -139,7 +140,7 @@ public class FcmPushNotificationApi extends DefaultApplicationPlugin implements 
     }
 
     protected JSONObject getRequestBody(HttpServletRequest request) throws ApiException {
-        try(BufferedReader br = new BufferedReader(new InputStreamReader(request.getInputStream()))) {
+        try (BufferedReader br = new BufferedReader(new InputStreamReader(request.getInputStream()))) {
             return new JSONObject(br.lines().collect(Collectors.joining()));
         } catch (IOException | JSONException e) {
             throw new ApiException(HttpServletResponse.SC_BAD_REQUEST, e);
@@ -149,25 +150,25 @@ public class FcmPushNotificationApi extends DefaultApplicationPlugin implements 
     protected String getRequiredParameter(HttpServletRequest request, String parameterName) throws ApiException {
         return Optional.of(parameterName)
                 .map(request::getParameter)
-                .orElseThrow(() -> new ApiException(HttpServletResponse.SC_BAD_REQUEST, "Parameter ["+parameterName+"] is not supplied"));
+                .orElseThrow(() -> new ApiException(HttpServletResponse.SC_BAD_REQUEST, "Parameter [" + parameterName + "] is not supplied"));
     }
 
     protected String getRequiredBodyContent(JSONObject jsonBody, String parameterName) throws ApiException {
         return Optional.of(parameterName)
                 .map(Try.onFunction(jsonBody::getString))
-                .orElseThrow(() -> new ApiException(HttpServletResponse.SC_BAD_REQUEST, "Parameter ["+parameterName+"] is not supplied"));
+                .orElseThrow(() -> new ApiException(HttpServletResponse.SC_BAD_REQUEST, "Parameter [" + parameterName + "] is not supplied"));
     }
 
     protected JSONObject getRequiredJsonBodyContent(JSONObject jsonBody, String parameterName) throws ApiException {
         return Optional.of(parameterName)
                 .map(Try.onFunction(jsonBody::getJSONObject))
-                .orElseThrow(() -> new ApiException(HttpServletResponse.SC_BAD_REQUEST, "Parameter [" + parameterName +"] is not supplied or not array"));
+                .orElseThrow(() -> new ApiException(HttpServletResponse.SC_BAD_REQUEST, "Parameter [" + parameterName + "] is not supplied or not array"));
     }
 
     protected JSONArray getRequiredArrayBodyContent(JSONObject jsonBody, String parameterName) throws ApiException {
         return Optional.of(parameterName)
                 .map(Try.onFunction(jsonBody::getJSONArray))
-                .orElseThrow(() -> new ApiException(HttpServletResponse.SC_BAD_REQUEST, "Parameter [" + parameterName +"] is not supplied or not array"));
+                .orElseThrow(() -> new ApiException(HttpServletResponse.SC_BAD_REQUEST, "Parameter [" + parameterName + "] is not supplied or not array"));
     }
 
     @Nonnull

@@ -3,6 +3,13 @@
     "title" : "@@pushNotification.fcmConfiguration@@",
     "properties" : [
       {
+        "name": "fcmDatabaseUrl",
+        "label": "Database URL",
+        "required": "true",
+        "value": "https://kecak-mobile.firebaseio.com",
+        "type": "textfield"
+      },
+      {
         "name" : "authorization",
         "label" : "@@pushNotification.authorization@@",
         "required" : "true",

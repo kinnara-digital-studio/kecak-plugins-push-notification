@@ -14,6 +14,7 @@ import org.joget.apps.app.model.AppDefinition;
 import org.joget.apps.app.model.PackageActivityForm;
 import org.joget.apps.app.service.AppService;
 import org.joget.apps.app.service.AppUtil;
+import org.joget.apps.form.model.Form;
 import org.joget.commons.util.LogUtil;
 import org.joget.workflow.model.WorkflowActivity;
 import org.joget.workflow.model.WorkflowAssignment;
@@ -41,10 +42,10 @@ public interface FcmPushNotificationMixin {
     String NOTIFICATION_SERVER = "https://fcm.googleapis.com/fcm/send";
     String CONTENT_TYPE = "application/json";
 
-    default void initializeSdk(@Nonnull JSONObject jsonPrivateKey) throws IOException {
+    default void initializeSdk(@Nonnull String databaseUrl, @Nonnull JSONObject jsonPrivateKey) throws IOException {
         FirebaseOptions options = new FirebaseOptions.Builder()
                 .setCredentials(GoogleCredentials.fromStream(new ByteArrayInputStream(jsonPrivateKey.toString().getBytes())))
-                .setDatabaseUrl("https://kecak-mobile.firebaseio.com")
+                .setDatabaseUrl(databaseUrl)
                 .build();
 
         FirebaseApp.initializeApp(options);
@@ -89,12 +90,12 @@ public interface FcmPushNotificationMixin {
         WorkflowManager workflowManager = (WorkflowManager) applicationContext.getBean("workflowManager");
         WorkflowActivity info = workflowManager.getRunningActivityInfo(assignment.getActivityId());
 
-        String formDefId = getFormFromActivity(info.getProcessDefId(), info.getActivityDefId()).orElse("");
+        String formDefId = getFormFromActivity(info.getProcessDefId(), info.getActivityDefId()).map(f -> f.getPropertyString("id")).orElse("");
         return getNotificationPayload(to, topic, assignment.getProcessId(), info.getProcessName(), assignment.getActivityId(), info.getName(), formDefId, notificationTitle, notificationContent);
     }
 
     default JSONObject getNotificationPayload(String to, String topic, WorkflowActivity activity, String notificationTitle, String notificationContent) throws JSONException {
-        String formDefId = getFormFromActivity(activity.getProcessDefId(), activity.getActivityDefId()).orElse("");
+        String formDefId = getFormFromActivity(activity.getProcessDefId(), activity.getActivityDefId()).map(f -> f.getPropertyString("id")).orElse("");
         return getNotificationPayload(to, topic, activity.getProcessId(), activity.getProcessName(), activity.getId(), activity.getName(), formDefId, notificationTitle, notificationContent);
     }
 
@@ -150,14 +151,14 @@ public interface FcmPushNotificationMixin {
      * @param activityDefId
      * @return
      */
-    default Optional<String> getFormFromActivity(String processDefId, String activityDefId) {
+    default Optional<Form> getFormFromActivity(String processDefId, String activityDefId) {
         if(activityDefId == null)
             return Optional.empty();
 
         AppDefinition appDefinition = AppUtil.getCurrentAppDefinition();
         AppService appService = (AppService) AppUtil.getApplicationContext().getBean("appService");
         PackageActivityForm packageActivityForm = appService.retrieveMappedForm(appDefinition.getAppId(), String.valueOf(appDefinition.getVersion()), processDefId, activityDefId);
-        return Optional.ofNullable(packageActivityForm).map(PackageActivityForm::getFormId);
+        return Optional.ofNullable(packageActivityForm).map(PackageActivityForm::getForm);
     }
 
     default String interpolateVariables(WorkflowActivity activity, String content) {

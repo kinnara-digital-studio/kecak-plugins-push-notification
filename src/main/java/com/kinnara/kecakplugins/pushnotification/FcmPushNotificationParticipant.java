@@ -14,6 +14,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 import org.springframework.context.ApplicationContext;
 
+import javax.annotation.Nonnull;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.Map;
@@ -49,14 +50,15 @@ public class FcmPushNotificationParticipant extends DefaultParticipantPlugin imp
         String notificationTitle = getNotificationTitle(properties);
         String notificationContent = getNotificationContent(properties);
         String authorization = getAuthorization(properties);
-        JSONObject jsonPrivateKey = getJsonPrivateKey(properties);
 
         Collection<String> users = participantPlugin.getActivityAssignments(properties);
         WorkflowActivity activityDefinition = workflowManager.getProcessActivityDefinition(workflowActivity.getProcessDefId(), workflowActivity.getActivityDefId());
-        if(WorkflowActivity.TYPE_NORMAL.equals(activityDefinition.getType())) {
+        if (WorkflowActivity.TYPE_NORMAL.equals(activityDefinition.getType())) {
             try {
                 if (!fcmInitialized) {
-                    initializeSdk(jsonPrivateKey);
+                    String databaseUrl = getDatabaseUrl(properties);
+                    JSONObject jsonPrivateKey = getJsonPrivateKey(properties);
+                    initializeSdk(databaseUrl, jsonPrivateKey);
                     fcmInitialized = true;
                 }
 
@@ -130,6 +132,7 @@ public class FcmPushNotificationParticipant extends DefaultParticipantPlugin imp
         return properties.getOrDefault("authorization", "").toString();
     }
 
+    @Nonnull
     protected JSONObject getJsonPrivateKey(Map properties) {
         try {
             return new JSONObject(properties.getOrDefault("jsonPrivateKey", "{}").toString());
@@ -137,5 +140,10 @@ public class FcmPushNotificationParticipant extends DefaultParticipantPlugin imp
             LogUtil.error(getClassName(), e, e.getMessage());
             return new JSONObject();
         }
+    }
+
+    @Nonnull
+    protected String getDatabaseUrl(Map properties) {
+        return properties.getOrDefault("fcmDatabaseUrl", "").toString();
     }
 }
