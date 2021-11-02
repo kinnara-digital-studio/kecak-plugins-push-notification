@@ -21,7 +21,7 @@ build-plugin:
   - mkdir -p ${CI_PROJECT_DIR}/artifacts
   - cp $CI_PROJECT_DIR/target/*.jar ${CI_PROJECT_DIR}/artifacts
   - ls -la ${CI_PROJECT_DIR}/artifacts
-  - curl --location --request POST ""${API_URL}"" --header "Authorization:Basic "${KECAK_AUTH}"" --form "pluginFile=@""${CI_PROJECT_DIR}""/artifacts/kecak-plugins-push-notification-1.0.0.jar"
+  # - curl --location --request POST ""${API_URL}"" --header "Authorization:Basic "${KECAK_AUTH}"" --form "pluginFile=@""${CI_PROJECT_DIR}""/artifacts/kecak-plugins-push-notification-1.0.0.jar"
 
 upload-to-git-repo:
   stage: deploy
