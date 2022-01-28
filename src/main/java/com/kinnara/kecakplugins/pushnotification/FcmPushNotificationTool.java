@@ -2,13 +2,12 @@ package com.kinnara.kecakplugins.pushnotification;
 
 import com.kinnara.kecakplugins.pushnotification.commons.FcmPushNotificationMixin;
 import com.kinnarastudio.commons.Try;
-import org.apache.http.HttpResponse;
-import org.apache.http.StatusLine;
 import org.joget.apps.app.model.AppDefinition;
 import org.joget.apps.app.model.PackageDefinition;
 import org.joget.apps.app.service.AppService;
 import org.joget.apps.app.service.AppUtil;
 import org.joget.commons.util.LogUtil;
+import org.joget.commons.util.PluginThread;
 import org.joget.plugin.base.DefaultApplicationPlugin;
 import org.joget.plugin.base.PluginManager;
 import org.joget.plugin.base.PluginWebSupport;
@@ -70,13 +69,14 @@ public class FcmPushNotificationTool extends DefaultApplicationPlugin implements
         final PluginManager pluginManager = (PluginManager) props.get("pluginManager");
         final WorkflowManager workflowManager = (WorkflowManager) pluginManager.getBean("workflowManager");
         final WorkflowUserManager workflowUserManager = (WorkflowUserManager) pluginManager.getBean("workflowUserManager");
+        final AppDefinition appDefinition = (AppDefinition) props.get("appDef");
 
         ClassLoader originalClassLoader = Thread.currentThread().getContextClassLoader();
         try {
-            String databaseUrl = props.get("fcmDatabaseUrl").toString();
-            JSONObject jsonPrivateKey = new JSONObject(props.get("jsonPrivateKey").toString());
 
             if (!fcmInitialized) {
+                String databaseUrl = props.get("fcmDatabaseUrl").toString();
+                JSONObject jsonPrivateKey = new JSONObject(props.get("jsonPrivateKey").toString());
                 initializeSdk(databaseUrl, jsonPrivateKey);
                 fcmInitialized = true;
             }
@@ -112,39 +112,13 @@ public class FcmPushNotificationTool extends DefaultApplicationPlugin implements
                     .flatMap(Collection::stream)
                     .collect(Collectors.toSet());
 
-            new Thread(Try.onRunnable(() -> {
+            new PluginThread(Try.onRunnable(() -> {
                 Thread.sleep(3000);
 
-                long notificationCount = Stream.concat(assignmentUsers.stream(), Arrays.stream(toUserId))
-                        .filter(Objects::nonNull)
-                        .filter(u -> !u.isEmpty())
-                        .distinct()
-                        .filter(Try.onPredicate(username -> {
-                            workflowUserManager.setCurrentThreadUser(username);
+                final Collection<String> users = Stream.concat(assignmentUsers.stream(), Arrays.stream(toUserId))
+                        .collect(Collectors.toSet());
 
-                            // should this be filtered by activityDefId ????
-                            final WorkflowAssignment activityAssignment = workflowManager.getAssignmentByProcess(processId);
-
-                            JSONObject jsonHttpPayload = buildHttpBody(
-                                    null,
-                                    username,
-                                    title,
-                                    content,
-                                    activityAssignment);
-
-                            boolean debug = "true".equalsIgnoreCase(getPropertyString("debug"));
-
-                            LogUtil.info(getClassName(), "Sending notification for process [" + processId + "] to user [" + username + "]");
-
-                            HttpResponse response = triggerPushNotification(authorization, jsonHttpPayload, debug);
-
-                            // return true when status = 200
-                            return Optional.ofNullable(response)
-                                    .map(HttpResponse::getStatusLine)
-                                    .map(StatusLine::getStatusCode)
-                                    .orElse(0) == 200;
-                        }))
-                        .count();
+                long notificationCount = sendNotifications(appDefinition, users, processId, authorization, title, content);
 
                 if (notificationCount == 0) {
                     LogUtil.warn(getClassName(), "Nobody received tbe notification");

@@ -33,14 +33,13 @@
       {
         "name" : "processId",
         "label" : ",@@userview.datalistinboxmenu.process@@",
-        "type" : "selectbox",
-        "required" : "true",
+        "type" : "multiselect",
         "options_ajax" : "[CONTEXT_PATH]/web/json/app[APP_PATH]/plugin/%s/service?action=getProcesses"
       },
       {
         "name" : "activityDefId",
         "label" : "@@userview.datalistinboxmenu.activity@@",
-        "type" : "selectbox",
+        "type" : "multiselect",
         "options_ajax_on_change" : "processId",
         "options_ajax" : "[CONTEXT_PATH]/web/json/app[APP_PATH]/plugin/%s/service?action=getActivities"
       }
@@ -49,19 +48,6 @@
   {
     "title" : "@@pushNotification.notification@@",
     "properties" : [
-      {
-        "name" : "participantId",
-        "label" : "@@pushNotification.participantId@@",
-        "type" : "multiselect",
-        "options_ajax_on_change" : "processId",
-        "options_ajax" : "[CONTEXT_PATH]/web/json/app[APP_PATH]/plugin/%s/service?action=getParticipants"
-      },
-      {
-        "name": "userId",
-        "label" : "@@pushNotification.userId@@",
-        "type" : "multiselect",
-        "options_ajax" : "[CONTEXT_PATH]/web/json/plugin/org.joget.apps.userview.lib.UserPermission/service?action=getUsers"
-      },
       {
         "name" : "notificationTitle",
         "label" : "@@pushNotification.notificationTitle@@",

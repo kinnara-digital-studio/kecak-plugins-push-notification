@@ -5,6 +5,7 @@ import com.google.firebase.FirebaseApp;
 import com.google.firebase.FirebaseOptions;
 import com.kinnarastudio.commons.Try;
 import org.apache.http.HttpResponse;
+import org.apache.http.StatusLine;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.StringEntity;
@@ -21,14 +22,16 @@ import org.joget.commons.util.LogUtil;
 import org.joget.workflow.model.WorkflowActivity;
 import org.joget.workflow.model.WorkflowAssignment;
 import org.joget.workflow.model.service.WorkflowManager;
+import org.joget.workflow.model.service.WorkflowUserManager;
 import org.joget.workflow.util.WorkflowUtil;
 import org.json.JSONException;
 import org.json.JSONObject;
-import org.springframework.context.ApplicationContext;
 
 import javax.annotation.Nonnull;
 import java.io.*;
 import java.lang.reflect.Method;
+import java.util.Collection;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -84,17 +87,68 @@ public interface FcmPushNotificationMixin {
         return null;
     }
 
-    default JSONObject getNotificationPayload(String to, String topic, WorkflowAssignment assignment, String notificationTitle, String notificationContent) throws JSONException {
-        ApplicationContext applicationContext = AppUtil.getApplicationContext();
-        WorkflowManager workflowManager = (WorkflowManager) applicationContext.getBean("workflowManager");
-        WorkflowActivity info = workflowManager.getRunningActivityInfo(assignment.getActivityId());
+    default boolean sendNotification(AppDefinition appDefinition, String username, WorkflowActivity activity, String authorization, String title, String content) throws IOException, JSONException {
+        LogUtil.info(getClass().getName(), "Sending notification for process [" + activity.getProcessId() + "] activity [" + activity.getId() + "] to user [" + username + "]");
 
-        String formDefId = getApplicationDefinition(assignment).flatMap(def -> getFormFromActivity(def, info.getProcessDefId(), info.getActivityDefId())).map(f -> f.getPropertyString("id")).orElse("");
-        return getNotificationPayload(to, topic, assignment.getProcessId(), info.getProcessName(), assignment.getActivityId(), info.getName(), formDefId, notificationTitle, notificationContent);
+        final JSONObject jsonHttpPayload = getNotificationPayload(
+                appDefinition,
+                null,
+                username,
+                activity,
+                title,
+                content);
+
+        final HttpResponse pushNotificationResponse = triggerPushNotification(authorization, jsonHttpPayload, true);
+
+        // return true when status = 200
+        return Optional
+                .ofNullable(pushNotificationResponse)
+                .map(HttpResponse::getStatusLine)
+                .map(StatusLine::getStatusCode)
+                .orElse(0) == 200;
     }
 
-    default JSONObject getNotificationPayload(String to, String topic, WorkflowActivity activity, String notificationTitle, String notificationContent) throws JSONException {
-        AppDefinition appDefinition = AppUtil.getCurrentAppDefinition();
+    default boolean sendNotification(AppDefinition appDefinition, String username, @Nonnull WorkflowAssignment assignment, String authorization, String title, String content) throws IOException, JSONException {
+        final WorkflowManager workflowManager = (WorkflowManager) AppUtil.getApplicationContext().getBean("workflowManager");
+        final WorkflowActivity workflowActivity = workflowManager.getActivityById(assignment.getActivityId());
+        return sendNotification(appDefinition, username, workflowActivity, authorization, title, content);
+    }
+
+    default long sendNotifications(AppDefinition appDefinition, Collection<String> usernames, @Nonnull WorkflowActivity activity, String authorization, String title, String content) {
+        return usernames.stream()
+                .filter(Objects::nonNull)
+                .filter(u -> !u.isEmpty())
+                .distinct()
+                .filter(Try.onPredicate(username -> sendNotification(appDefinition, username, activity, authorization, title, content)))
+                .count();
+    }
+
+    default long sendNotifications(AppDefinition appDefinition, Collection<String> usernames, String processIdOrActivityId, String authorization, String title, String content) {
+        final WorkflowUserManager workflowUserManager = (WorkflowUserManager) AppUtil.getApplicationContext().getBean("workflowUserManager");
+        final WorkflowManager workflowManager = (WorkflowManager) AppUtil.getApplicationContext().getBean("workflowManager");
+
+        return usernames.stream()
+                .filter(Objects::nonNull)
+                .filter(u -> !u.isEmpty())
+                .distinct()
+                .filter(Try.onPredicate(username -> {
+                    workflowUserManager.setCurrentThreadUser(username);
+
+                    final WorkflowAssignment assignment = Optional.of(processIdOrActivityId)
+                            .map(workflowManager::getAssignment)
+                            .orElseGet(() -> workflowManager.getAssignmentByProcess(processIdOrActivityId));
+
+                    if(assignment == null) {
+                        LogUtil.warn(getClass().getName(), "sendNotification : no assignment found for id [" + processIdOrActivityId + "]");
+                        return false;
+                    }
+
+                    return sendNotification(appDefinition, username, assignment, authorization, title, content);
+                }))
+                .count();
+    }
+
+    default JSONObject getNotificationPayload(AppDefinition appDefinition, String to, String topic, WorkflowActivity activity, String notificationTitle, String notificationContent) throws JSONException {
         String formDefId = getFormFromActivity(appDefinition, activity.getProcessDefId(), activity.getActivityDefId()).map(f -> f.getPropertyString("id")).orElse("");
         return getNotificationPayload(to, topic, activity.getProcessId(), activity.getProcessName(), activity.getId(), activity.getName(), formDefId, notificationTitle, notificationContent);
     }
@@ -204,10 +258,22 @@ public interface FcmPushNotificationMixin {
      * @return
      */
     default Optional<Form> getFormFromActivity(AppDefinition appDefinition, String processDefId, String activityDefId) {
-        if(activityDefId == null)
+        if(activityDefId == null) {
+            LogUtil.warn(getClass().getName(), "activityDefId is null");
             return Optional.empty();
+        }
 
         AppService appService = (AppService) AppUtil.getApplicationContext().getBean("appService");
+        if(appService == null) {
+            LogUtil.warn(getClass().getName(), "AppService is null");
+            return Optional.empty();
+        }
+
+        if(appDefinition == null) {
+            LogUtil.warn(getClass().getName(), "AppDefinition is null");
+            return Optional.empty();
+        }
+
         PackageActivityForm packageActivityForm = appService.retrieveMappedForm(appDefinition.getAppId(), String.valueOf(appDefinition.getVersion()), processDefId, activityDefId);
         return Optional.ofNullable(packageActivityForm).map(PackageActivityForm::getForm);
     }

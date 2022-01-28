@@ -1,8 +1,7 @@
 package com.kinnara.kecakplugins.pushnotification;
 
 import com.kinnara.kecakplugins.pushnotification.commons.FcmPushNotificationMixin;
-import org.apache.http.HttpResponse;
-import org.apache.http.StatusLine;
+import org.joget.apps.app.model.AppDefinition;
 import org.joget.apps.app.service.AppUtil;
 import org.joget.commons.util.LogUtil;
 import org.joget.plugin.base.PluginManager;
@@ -18,8 +17,6 @@ import javax.annotation.Nonnull;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
 
 public class FcmPushNotificationParticipant extends DefaultParticipantPlugin implements FcmPushNotificationMixin {
     private boolean fcmInitialized = false;
@@ -46,6 +43,7 @@ public class FcmPushNotificationParticipant extends DefaultParticipantPlugin imp
         PluginManager pluginManager = (PluginManager) applicationContext.getBean("pluginManager");
         WorkflowManager workflowManager = (WorkflowManager) applicationContext.getBean("workflowManager");
         ParticipantPlugin participantPlugin = pluginManager.getPluginObject((Map<String, Object>) getProperty("participantPlugin"));
+        AppDefinition appDefinition = AppUtil.getCurrentAppDefinition();
 
         String notificationTitle = getNotificationTitle(properties);
         String notificationContent = getNotificationContent(properties);
@@ -62,35 +60,7 @@ public class FcmPushNotificationParticipant extends DefaultParticipantPlugin imp
                     fcmInitialized = true;
                 }
 
-                long notificationCount = users.stream()
-                        .filter(Objects::nonNull)
-                        .filter(u -> !u.isEmpty())
-                        .distinct()
-                        .peek(u -> LogUtil.info(getClassName(), "Sending notification for process [" + workflowActivity.getProcessId() + "] to user [" + u + "]"))
-                        .filter(username -> {
-                            try {
-                                JSONObject jsonHttpPayload = getNotificationPayload(
-                                        null,
-                                        username,
-                                        workflowActivity,
-                                        notificationTitle,
-                                        notificationContent);
-
-                                HttpResponse pushNotificationResponse = triggerPushNotification(authorization, jsonHttpPayload, true);
-
-                                // return true when status = 200
-                                return Optional
-                                        .ofNullable(pushNotificationResponse)
-                                        .map(HttpResponse::getStatusLine)
-                                        .map(StatusLine::getStatusCode)
-                                        .orElse(0) == 200;
-                            } catch (IOException | JSONException e) {
-                                LogUtil.error(getClassName(), e, e.getMessage());
-                                return false;
-                            }
-                        })
-                        .peek(u -> LogUtil.info(getClassName(), "Notification for process [" + activityDefinition.getProcessId() + "] to user [" + u + "] has been sent"))
-                        .count();
+                long notificationCount = sendNotifications(appDefinition, users, workflowActivity, authorization, notificationTitle, notificationContent);
 
                 if (notificationCount == 0) {
                     LogUtil.warn(getClassName(), "No notification has been sent");
