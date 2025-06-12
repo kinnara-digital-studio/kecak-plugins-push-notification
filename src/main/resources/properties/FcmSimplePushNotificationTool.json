@@ -1,0 +1,63 @@
+[
+  {
+    "title" : "@@pushNotification.fcmConfiguration@@",
+    "properties" : [
+      {
+        "name": "fcmDatabaseUrl",
+        "label": "@@pushNotification.fcmDatabaseUrl@@",
+        "required": "true",
+        "value": "kecak-mobile",
+        "type": "textfield"
+      },
+      {
+        "name" : "jsonPrivateKey",
+        "label" : "@@pushNotification.jsonPrivateKey@@",
+        "required" : "true",
+        "type" : "codeeditor",
+        "mode": "javascript",
+        "rows" : "7",
+        "cols" : "65"
+      }
+    ]
+  },
+  {
+    "title" : "@@pushNotification.notification@@",
+    "properties" : [
+      {
+        "name" : "participantId",
+        "label" : "@@pushNotification.participantId@@",
+        "type" : "multiselect",
+        "options_ajax_on_change" : "processId",
+        "options_ajax" : "[CONTEXT_PATH]/web/json/app[APP_PATH]/plugin/%s/service?action=getParticipants"
+      },
+      {
+        "name": "userId",
+        "label" : "@@pushNotification.userId@@",
+        "type" : "multiselect",
+        "options_ajax" : "[CONTEXT_PATH]/web/json/plugin/org.joget.apps.userview.lib.UserPermission/service?action=getUsers"
+      },
+      {
+        "name" : "notificationTitle",
+        "label" : "@@pushNotification.notificationTitle@@",
+        "required" : "true",
+        "type" : "textfield",
+        "value" : "New Inbox"
+      },
+      {
+        "name" : "notificationContent",
+        "label" : "@@pushNotification.notificationContent@@",
+        "type" : "textarea",
+        "value" : "From : #assignment.processRequesterId#"
+      },
+      {
+        "name" : "debug",
+        "label" : "@@pushNotification.debug@@",
+        "type" : "checkbox",
+        "options":[{
+          "value":"true",
+          "label":""
+        }]
+      }
+    ]
+  }
+]

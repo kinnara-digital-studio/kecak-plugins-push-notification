@@ -31,10 +31,10 @@ import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public class FcmPushNotificationTool extends DefaultApplicationPlugin implements PluginWebSupport, FcmPushNotificationMixin {
+public class FcmAssignmentPushNotificationTool extends DefaultApplicationPlugin implements PluginWebSupport, FcmPushNotificationMixin {
     private static boolean fcmInitialized = false;
 
-    public final static String LABEL = "FCM Push Notification Tool";
+    public final static String LABEL = "FCM Assignment Push Notification Tool";
 
     @Override
     public String getLabel() {
@@ -48,7 +48,7 @@ public class FcmPushNotificationTool extends DefaultApplicationPlugin implements
 
     @Override
     public String getPropertyOptions() {
-        return AppUtil.readPluginResource(getClassName(), "/properties/InboxNotificationTool.json", new String[]{getClassName(), getClassName(), getClassName()}, true, "/messages/InboxNotificationTool");
+        return AppUtil.readPluginResource(getClassName(), "/properties/FcmInboxPushNotificationTool.json", new String[]{getClassName(), getClassName(), getClassName()}, true, "/messages/InboxNotificationTool");
     }
 
     @Override
@@ -92,17 +92,17 @@ public class FcmPushNotificationTool extends DefaultApplicationPlugin implements
                 return null;
             }
 
-            String toParticipantId = getPropertyString("participantId");
+            String toParticipantIds = getPropertyString("participantId");
             String[] toUserId = getPropertyString("userId").split("[;,]");
 
             final String title = props.get("notificationTitle").toString();
             final String content = props.get("notificationContent").toString();
             final String processId = workflowAssignment.getProcessId();
 
-            Set<String> assignmentUsers = Arrays.stream(toParticipantId.split("[,;]"))
+            Set<String> assignmentUsers = Arrays.stream(toParticipantIds.split("[,;]"))
                     .map(String::trim)
                     .filter(p -> !p.isEmpty())
-                    .map(p -> WorkflowUtil.getAssignmentUsers(
+                    .map(participantId -> WorkflowUtil.getAssignmentUsers(
 
                             WorkflowUtil.getProcessDefPackageId(workflowAssignment.getProcessDefId()),
                             workflowAssignment.getProcessDefId(),
@@ -110,7 +110,7 @@ public class FcmPushNotificationTool extends DefaultApplicationPlugin implements
                             workflowAssignment.getProcessVersion(),
                             workflowAssignment.getActivityId(),
                             "",
-                            p
+                            participantId
                     ))
                     .filter(Objects::nonNull)
                     .flatMap(Collection::stream)

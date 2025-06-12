@@ -15,7 +15,7 @@ public class Activator implements BundleActivator {
 
         //Register plugin here
         registrationList.add(context.registerService(FcmPushNotificationAuditTrail.class.getName(), new FcmPushNotificationAuditTrail(), null));
-        registrationList.add(context.registerService(FcmPushNotificationTool.class.getName(), new FcmPushNotificationTool(), null));
+        registrationList.add(context.registerService(FcmAssignmentPushNotificationTool.class.getName(), new FcmAssignmentPushNotificationTool(), null));
         registrationList.add(context.registerService(FcmPushNotificationParticipant.class.getName(), new FcmPushNotificationParticipant(), null));
     }
 
