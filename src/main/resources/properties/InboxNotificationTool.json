@@ -6,14 +6,8 @@
         "name": "fcmDatabaseUrl",
         "label": "@@pushNotification.fcmDatabaseUrl@@",
         "required": "true",
-        "value": "https://kecak-mobile.firebaseio.com",
+        "value": "kecak-mobile",
         "type": "textfield"
-      },
-      {
-        "name" : "authorization",
-        "label" : "@@pushNotification.authorization@@",
-        "required" : "true",
-        "type" : "textfield"
       },
       {
         "name" : "jsonPrivateKey",
@@ -28,18 +22,17 @@
   },
   {
 
-    "title" : "@@userview.datalistinboxmenu.activity@@",
+    "title" : "@@pushNotification.activity@@",
     "properties" : [
       {
         "name" : "processId",
-        "label" : ",@@userview.datalistinboxmenu.process@@",
+        "label" : ",@@pushNotification.process@@",
         "type" : "selectbox",
-        "required" : "true",
         "options_ajax" : "[CONTEXT_PATH]/web/json/app[APP_PATH]/plugin/%s/service?action=getProcesses"
       },
       {
         "name" : "activityDefId",
-        "label" : "@@userview.datalistinboxmenu.activity@@",
+        "label" : "@@pushNotification.activity@@",
         "type" : "selectbox",
         "options_ajax_on_change" : "processId",
         "options_ajax" : "[CONTEXT_PATH]/web/json/app[APP_PATH]/plugin/%s/service?action=getActivities"

@@ -1,6 +1,6 @@
-package com.kinnara.kecakplugins.pushnotification;
+package com.kinnarastudio.kecakplugins.pushnotification;
 
-import com.kinnara.kecakplugins.pushnotification.commons.FcmPushNotificationMixin;
+import com.kinnarastudio.kecakplugins.pushnotification.commons.FcmPushNotificationMixin;
 import com.kinnarastudio.commons.Try;
 import com.kinnarastudio.commons.jsonstream.JSONCollectors;
 import org.joget.apps.app.model.AppDefinition;
@@ -36,14 +36,19 @@ import java.util.stream.Stream;
 public class FcmPushNotificationAuditTrail extends DefaultAuditTrailPlugin implements FcmPushNotificationMixin, PluginWebSupport {
     private boolean fcmInitialized = false;
 
+    public final static String LABEL = "FCM Push Notification";
+
     @Override
     public String getName() {
-        return getLabel();
+        return LABEL;
     }
 
     @Override
     public String getVersion() {
-        return getClass().getPackage().getImplementationVersion();
+        PluginManager pluginManager = (PluginManager) AppUtil.getApplicationContext().getBean("pluginManager");
+        ResourceBundle resourceBundle = pluginManager.getPluginMessageBundle(getClassName(), "/messages/BuildNumber");
+        String buildNumber = resourceBundle.getString("buildNumber");
+        return buildNumber;
     }
 
     @Override
@@ -115,7 +120,7 @@ public class FcmPushNotificationAuditTrail extends DefaultAuditTrailPlugin imple
                         final String notificationTitle = getPropertyNotificationTitle(assignment);
                         final String notificationContent = getPropertyNotificationContent(assignment);
 
-                        return sendNotification(appDefinition, username, assignment, authorization, notificationTitle, notificationContent);
+                        return sendNotification(appDefinition, username, assignment, notificationTitle, notificationContent);
                     })).count();
 
             if (notificationCount == 0) {
@@ -129,7 +134,7 @@ public class FcmPushNotificationAuditTrail extends DefaultAuditTrailPlugin imple
 
     @Override
     public String getLabel() {
-        return "FCM Push Notification";
+        return LABEL;
     }
 
     @Override
@@ -139,7 +144,7 @@ public class FcmPushNotificationAuditTrail extends DefaultAuditTrailPlugin imple
 
     @Override
     public String getPropertyOptions() {
-        return AppUtil.readPluginResource(getClassName(), "/properties/FcmPushNotificationAuditTrail.json", new Object[] {getClassName(), getClassName()}, false, "/message/inboxNotificationTool");
+        return AppUtil.readPluginResource(getClassName(), "/properties/FcmPushNotificationAuditTrail.json", new Object[] {getClassName(), getClassName()}, false, "/messages/inboxNotificationTool");
     }
 
     protected String getPropertyDatabaseUrl(WorkflowAssignment assignment) {

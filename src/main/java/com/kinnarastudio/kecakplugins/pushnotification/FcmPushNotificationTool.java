@@ -1,6 +1,6 @@
-package com.kinnara.kecakplugins.pushnotification;
+package com.kinnarastudio.kecakplugins.pushnotification;
 
-import com.kinnara.kecakplugins.pushnotification.commons.FcmPushNotificationMixin;
+import com.kinnarastudio.kecakplugins.pushnotification.commons.FcmPushNotificationMixin;
 import com.kinnarastudio.commons.Try;
 import org.joget.apps.app.model.AppDefinition;
 import org.joget.apps.app.model.PackageDefinition;
@@ -34,9 +34,11 @@ import java.util.stream.Stream;
 public class FcmPushNotificationTool extends DefaultApplicationPlugin implements PluginWebSupport, FcmPushNotificationMixin {
     private static boolean fcmInitialized = false;
 
+    public final static String LABEL = "FCM Push Notification Tool";
+
     @Override
     public String getLabel() {
-        return "FCM Push Notification Tool";
+        return LABEL;
     }
 
     @Override
@@ -46,17 +48,20 @@ public class FcmPushNotificationTool extends DefaultApplicationPlugin implements
 
     @Override
     public String getPropertyOptions() {
-        return AppUtil.readPluginResource(this.getClass().getName(), "/properties/inboxNotificationTool.json", new String[]{getClassName(), getClassName(), getClassName()}, true, "message/inboxNotificationTool");
+        return AppUtil.readPluginResource(getClassName(), "/properties/InboxNotificationTool.json", new String[]{getClassName(), getClassName(), getClassName()}, true, "/messages/InboxNotificationTool");
     }
 
     @Override
     public String getName() {
-        return getLabel() + getVersion();
+        return LABEL;
     }
 
     @Override
     public String getVersion() {
-        return getClass().getPackage().getImplementationVersion();
+        PluginManager pluginManager = (PluginManager) AppUtil.getApplicationContext().getBean("pluginManager");
+        ResourceBundle resourceBundle = pluginManager.getPluginMessageBundle(getClassName(), "/messages/BuildNumber");
+        String buildNumber = resourceBundle.getString("buildNumber");
+        return buildNumber;
     }
 
     @Override
@@ -75,9 +80,9 @@ public class FcmPushNotificationTool extends DefaultApplicationPlugin implements
         try {
 
             if (!fcmInitialized) {
-                String databaseUrl = props.get("fcmDatabaseUrl").toString();
+                String projectId = getProjectId(props);
                 JSONObject jsonPrivateKey = new JSONObject(props.get("jsonPrivateKey").toString());
-                initializeSdk(databaseUrl, jsonPrivateKey);
+                initializeSdk(projectId, jsonPrivateKey);
                 fcmInitialized = true;
             }
 
@@ -90,7 +95,6 @@ public class FcmPushNotificationTool extends DefaultApplicationPlugin implements
             String toParticipantId = getPropertyString("participantId");
             String[] toUserId = getPropertyString("userId").split("[;,]");
 
-            final String authorization = props.get("authorization").toString();
             final String title = props.get("notificationTitle").toString();
             final String content = props.get("notificationContent").toString();
             final String processId = workflowAssignment.getProcessId();
@@ -118,7 +122,7 @@ public class FcmPushNotificationTool extends DefaultApplicationPlugin implements
                 final Collection<String> users = Stream.concat(assignmentUsers.stream(), Arrays.stream(toUserId))
                         .collect(Collectors.toSet());
 
-                long notificationCount = sendNotifications(appDefinition, users, processId, authorization, title, content);
+                long notificationCount = sendNotifications(appDefinition, users, processId, title, content);
 
                 if (notificationCount == 0) {
                     LogUtil.warn(getClassName(), "Nobody received tbe notification");
@@ -161,9 +165,13 @@ public class FcmPushNotificationTool extends DefaultApplicationPlugin implements
         return null;
     }
 
+    public String getProjectId(Map props) {
+        return props.get("fcmDatabaseUrl").toString();
+    }
+
     @Override
     public void webService(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
-        boolean isAdmin = WorkflowUtil.isCurrentUserInRole((String) "ROLE_ADMIN");
+        boolean isAdmin = WorkflowUtil.isCurrentUserInRole("ROLE_ADMIN");
         if (!isAdmin) {
             response.sendError(HttpServletResponse.SC_UNAUTHORIZED);
             return;

@@ -1,11 +1,14 @@
-package com.kinnara.kecakplugins.pushnotification.commons;
+package com.kinnarastudio.kecakplugins.pushnotification.commons;
 
 import com.google.auth.oauth2.GoogleCredentials;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.FirebaseOptions;
+import com.google.firebase.messaging.FirebaseMessaging;
+import com.google.firebase.messaging.FirebaseMessagingException;
+import com.google.firebase.messaging.Message;
+import com.google.firebase.messaging.Notification;
 import com.kinnarastudio.commons.Try;
 import org.apache.http.HttpResponse;
-import org.apache.http.StatusLine;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.StringEntity;
@@ -45,10 +48,11 @@ public interface FcmPushNotificationMixin {
     String NOTIFICATION_SERVER = "https://fcm.googleapis.com/fcm/send";
     String CONTENT_TYPE = "application/json";
 
-    default void initializeSdk(@Nonnull String databaseUrl, @Nonnull JSONObject jsonPrivateKey) throws IOException {
-        FirebaseOptions options = new FirebaseOptions.Builder()
+    default void initializeSdk(@Nonnull String projectId, @Nonnull JSONObject jsonPrivateKey) throws IOException {
+        FirebaseOptions options = FirebaseOptions
+                .builder()
                 .setCredentials(GoogleCredentials.fromStream(new ByteArrayInputStream(jsonPrivateKey.toString().getBytes())))
-                .setDatabaseUrl(databaseUrl)
+                .setProjectId(projectId)
                 .build();
 
         FirebaseApp.initializeApp(options);
@@ -61,19 +65,20 @@ public interface FcmPushNotificationMixin {
      * @return
      * @throws IOException
      */
+    @Deprecated
     default HttpResponse triggerPushNotification(String authorization, JSONObject data, boolean debug) throws IOException {
-        if(debug) {
-            LogUtil.info(getClass().getName(), "Request Payload ["+data.toString()+"]");
+        if (debug) {
+            LogUtil.info(getClass().getName(), "Request Payload [" + data.toString() + "]");
         }
 
         HttpPost request = getFcmRequest(authorization, data);
 
-        try(CloseableHttpClient client = HttpClientBuilder.create().build();
-            CloseableHttpResponse response = client.execute(request)) {
+        try (CloseableHttpClient client = HttpClientBuilder.create().build();
+             CloseableHttpResponse response = client.execute(request)) {
 
             if (debug) {
                 try (BufferedReader br = new BufferedReader(new InputStreamReader(response.getEntity().getContent()))) {
-                    if(debug) {
+                    if (debug) {
                         LogUtil.info(getClass().getName(), "Response Payload [" + br.lines().collect(Collectors.joining()) + "]");
                     }
                 }
@@ -87,31 +92,43 @@ public interface FcmPushNotificationMixin {
         return null;
     }
 
-    default boolean sendNotification(AppDefinition appDefinition, String username, WorkflowActivity activity, String authorization, String title, String content) throws IOException, JSONException {
-        LogUtil.info(getClass().getName(), "Sending notification for process [" + activity.getProcessId() + "] activity [" + activity.getId() + "] to user [" + username + "]");
+    default boolean sendNotification(AppDefinition appDefinition, String username, WorkflowActivity activity, String title, String content) throws IOException, JSONException {
+        final Message.Builder messageBuilder = Message.builder()
+                .setTopic(username)
+                .putData("title", title)
+                .putData("messages", content);
+        if (activity != null) {
+            messageBuilder.putData("activityName", activity.getName());
+            messageBuilder.putData("activityId", activity.getId());
+            messageBuilder.putData("processName", activity.getProcessName());
+            messageBuilder.putData("processId", activity.getProcessId());
+        }
 
-        final JSONObject jsonHttpPayload = getNotificationPayload(
-                appDefinition,
-                null,
-                username,
-                activity,
-                title,
-                content);
+        messageBuilder.putData("appId", appDefinition.getAppId());
+        messageBuilder.putData("appVersion", appDefinition.getVersion().toString());
+        messageBuilder.putData("click_action", "FLUTTER_NOTIFICATION_CLICK");
 
-        final HttpResponse pushNotificationResponse = triggerPushNotification(authorization, jsonHttpPayload, true);
+        final Notification notification = Notification.builder()
+                .setTitle(title)
+                .setBody(content)
+                .build();
+        messageBuilder.setNotification(notification);
 
-        // return true when status = 200
-        return Optional
-                .ofNullable(pushNotificationResponse)
-                .map(HttpResponse::getStatusLine)
-                .map(StatusLine::getStatusCode)
-                .orElse(0) == 200;
+        try {
+            Message message = messageBuilder.build();
+            String response = FirebaseMessaging.getInstance().send(message);
+            LogUtil.info(getClass().getName(), "Firebase : successfully sent message with response [" + response + "]");
+            return true;
+        } catch (FirebaseMessagingException e) {
+            LogUtil.error(getClass().getName(), e, e.getMessage());
+            return false;
+        }
     }
 
-    default boolean sendNotification(AppDefinition appDefinition, String username, @Nonnull WorkflowAssignment assignment, String authorization, String title, String content) throws IOException, JSONException {
+    default boolean sendNotification(AppDefinition appDefinition, String username, @Nonnull WorkflowAssignment assignment, String title, String content) throws IOException, JSONException {
         final WorkflowManager workflowManager = (WorkflowManager) AppUtil.getApplicationContext().getBean("workflowManager");
         final WorkflowActivity workflowActivity = workflowManager.getActivityById(assignment.getActivityId());
-        return sendNotification(appDefinition, username, workflowActivity, authorization, title, content);
+        return sendNotification(appDefinition, username, workflowActivity, title, content);
     }
 
     default long sendNotifications(AppDefinition appDefinition, Collection<String> usernames, @Nonnull WorkflowActivity activity, String authorization, String title, String content) {
@@ -119,11 +136,11 @@ public interface FcmPushNotificationMixin {
                 .filter(Objects::nonNull)
                 .filter(u -> !u.isEmpty())
                 .distinct()
-                .filter(Try.onPredicate(username -> sendNotification(appDefinition, username, activity, authorization, title, content)))
+                .filter(Try.onPredicate(username -> sendNotification(appDefinition, username, activity, title, content)))
                 .count();
     }
 
-    default long sendNotifications(AppDefinition appDefinition, Collection<String> usernames, String processIdOrActivityId, String authorization, String title, String content) {
+    default long sendNotifications(AppDefinition appDefinition, Collection<String> usernames, String processIdOrActivityId, String title, String content) {
         final WorkflowUserManager workflowUserManager = (WorkflowUserManager) AppUtil.getApplicationContext().getBean("workflowUserManager");
         final WorkflowManager workflowManager = (WorkflowManager) AppUtil.getApplicationContext().getBean("workflowManager");
 
@@ -138,12 +155,12 @@ public interface FcmPushNotificationMixin {
                             .map(workflowManager::getAssignment)
                             .orElseGet(() -> workflowManager.getAssignmentByProcess(processIdOrActivityId));
 
-                    if(assignment == null) {
+                    if (assignment == null) {
                         LogUtil.warn(getClass().getName(), "sendNotification : no assignment found for id [" + processIdOrActivityId + "]");
                         return false;
                     }
 
-                    return sendNotification(appDefinition, username, assignment, authorization, title, content);
+                    return sendNotification(appDefinition, username, assignment, title, content);
                 }))
                 .count();
     }
@@ -154,7 +171,6 @@ public interface FcmPushNotificationMixin {
     }
 
     /**
-     *
      * @param to
      * @param topic
      * @param processId
@@ -168,35 +184,33 @@ public interface FcmPushNotificationMixin {
      */
     default JSONObject getNotificationPayload(String to, String topic, String processId, String processName, String activityId, String activityName, String formDefId, String title, String content) throws JSONException {
         AppDefinition appDefinition = AppUtil.getCurrentAppDefinition();
+        return new JSONObject() {{
+            if (to != null && !to.isEmpty())
+                put("to", to);
 
-        JSONObject jsonHtmlPayload = new JSONObject();
-        if(to != null && !to.isEmpty())
-            jsonHtmlPayload.put("to", to);
+            if (topic != null && !topic.isEmpty())
+                put("to", "/topics/" + topic);
 
-        if(topic != null && !topic.isEmpty())
-            jsonHtmlPayload.put("to", "/topics/" + topic);
+            put("content_available", true);
 
-        jsonHtmlPayload.put("content_available", true);
+            put("data", new JSONObject() {{
+                put("title", title);
+                put("messages", content);
+                put("activityName", activityName);
+                put("activityId", activityId);
+                put("processId", processId);
+                put("processName", processName);
+                put("appId", appDefinition.getAppId());
+                put("appVersion", appDefinition.getVersion());
+                put("formId", formDefId);
+                put("click_action", "FLUTTER_NOTIFICATION_CLICK");
+            }});
 
-        JSONObject jsonData = new JSONObject();
-        jsonData.put("title", title);
-        jsonData.put("message", content);
-        jsonData.put("activityName", activityName);
-        jsonData.put("activityId", activityId);
-        jsonData.put("processId", processId);
-        jsonData.put("processName", processName);
-        jsonData.put("appId", appDefinition.getAppId());
-        jsonData.put("appVersion", appDefinition.getVersion());
-        jsonData.put("formId", formDefId);
-        jsonData.put("click_action", "FLUTTER_NOTIFICATION_CLICK");
-        jsonHtmlPayload.put("data", jsonData);
-
-        JSONObject jsonNotification = new JSONObject();
-        jsonNotification.put("title", title);
-        jsonNotification.put("body", content);
-        jsonHtmlPayload.put("notification", jsonNotification);
-
-        return jsonHtmlPayload;
+            put("notification", new JSONObject() {{
+                put("title", title);
+                put("body", content);
+            }});
+        }};
     }
 
     default Optional<Form> getFormFromAssignment(WorkflowAssignment workflowAssignment) {
@@ -253,23 +267,24 @@ public interface FcmPushNotificationMixin {
 
     /**
      * Get Form from Activity
+     *
      * @param processDefId
      * @param activityDefId
      * @return
      */
     default Optional<Form> getFormFromActivity(AppDefinition appDefinition, String processDefId, String activityDefId) {
-        if(activityDefId == null) {
+        if (activityDefId == null) {
             LogUtil.warn(getClass().getName(), "activityDefId is null");
             return Optional.empty();
         }
 
         AppService appService = (AppService) AppUtil.getApplicationContext().getBean("appService");
-        if(appService == null) {
+        if (appService == null) {
             LogUtil.warn(getClass().getName(), "AppService is null");
             return Optional.empty();
         }
 
-        if(appDefinition == null) {
+        if (appDefinition == null) {
             LogUtil.warn(getClass().getName(), "AppDefinition is null");
             return Optional.empty();
         }
@@ -284,17 +299,17 @@ public interface FcmPushNotificationMixin {
 
         StringBuffer sb = new StringBuffer();
         Matcher codeMatcher = CODE_PATTERN.matcher(content);
-        while(codeMatcher.find()) {
+        while (codeMatcher.find()) {
             String code = codeMatcher.group();
 
             Matcher wfVariableMatcher = WF_VARIABLE_PATTERN.matcher(code);
             Matcher activityPropertyMatcher = ACTIVITY_PROPERTY_PATTERN.matcher(code);
 
-            if(wfVariableMatcher.find()) {
+            if (wfVariableMatcher.find()) {
                 String variableName = wfVariableMatcher.group();
                 String value = workflowManager.getProcessVariable(processId, variableName);
                 codeMatcher.appendReplacement(sb, value);
-            } else if(activityPropertyMatcher.find()) {
+            } else if (activityPropertyMatcher.find()) {
                 String propertyName = activityPropertyMatcher.group();
                 char firstChar = propertyName.charAt(0);
                 firstChar = Character.toUpperCase(firstChar);
@@ -339,11 +354,11 @@ public interface FcmPushNotificationMixin {
 
         JSONObject jsonData = new JSONObject();
         jsonData.put("title", title);
-        jsonData.put("message", content);
+        jsonData.put("messages", content);
 
-        if(wfAssignment != null) {
+        if (wfAssignment != null) {
             WorkflowActivity info = workflowManager.getRunningActivityInfo(wfAssignment.getActivityId());
-            if(info != null) {
+            if (info != null) {
                 jsonData.put("activityDefId", info.getActivityDefId());
                 jsonData.put("processDefId", info.getProcessDefId());
             }

@@ -6,14 +6,8 @@
         "name": "fcmDatabaseUrl",
         "label": "@@pushNotification.fcmDatabaseUrl@@",
         "required": "true",
-        "value": "https://kecak-mobile.firebaseio.com",
+        "value": "kecak-mobile",
         "type": "textfield"
-      },
-      {
-        "name" : "authorization",
-        "label" : "@@pushNotification.authorization@@",
-        "required" : "true",
-        "type" : "textfield"
       },
       {
         "name" : "jsonPrivateKey",
@@ -58,8 +52,8 @@
   {
     "title": "@@pushNotification.emailNotif.title@@",
     "properties" : [{
-        label : '@@pushNotification.mailSetting@@',
-        type : 'header'
+        "label" : "@@pushNotification.mailSetting@@",
+        "type" : "header"
     },{
         "name" : "host",
         "label" : "@@app.emailtool.host@@",
@@ -100,8 +94,8 @@
         "type" : "password"
     },
     {
-        label : '@@pushNotification.emailDetail@@',
-        type : 'header'
+        "label" : "@@pushNotification.emailDetail@@",
+        "type" : "header"
     },  
     {
         "name" : "from",
@@ -151,14 +145,14 @@
         }]
     },
     {
-        label : '@@pushNotification.headerAttachment@@',
-        type : 'header'
+        "label" : "@@pushNotification.headerAttachment@@",
+        "type" : "header"
     },
     {
         "name":"formDefId",
         "label":"@@app.emailtool.form@@",
         "type":"selectbox",
-        "options_ajax":"[CONTEXT_PATH]/web/json/console/app[APP_PATH]/forms/options",
+        "options_ajax":"[CONTEXT_PATH]/web/json/console/app[APP_PATH]/forms/options"
     },
     {
         "name": "foreignKeyId",

@@ -1,12 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
     <modelVersion>4.0.0</modelVersion>
-    <groupId>com.kinnara.kecakplugins.pushnotification</groupId>
+    <groupId>com.kinnarastudio.kecakplugins.pushnotification</groupId>
     <artifactId>kecak-plugins-push-notification</artifactId>
     <packaging>bundle</packaging>
-    <version>1.0.0</version>
+    <version>3.0.0</version>
     <name>kecak-plugins-push-notification</name>
     <url>http://www.kecak.org</url>
+    <scm>
+        <connection>scm:git:ssh://git@github.com:kinnara-digital-studio/kecak-plugins-push-notification.git</connection>
+        <developerConnection>scm:git:ssh://git@github.com:kinnara-digital-studio/kecak-plugins-push-notification.git</developerConnection>
+        <url>ssh://git@github.com:kinnara-digital-studio/kecak-plugins-push-notification.git</url>
+        <tag>HEAD</tag>
+    </scm>
     <build>
         <plugins>
             <plugin>
@@ -28,6 +34,26 @@
                             <addDefaultSpecificationEntries>true</addDefaultSpecificationEntries>
                         </manifest>
                     </archive>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>buildnumber-maven-plugin</artifactId>
+                <version>1.4</version>
+                <executions>
+                    <execution>
+                        <phase>validate</phase>
+                        <goals>
+                            <goal>create</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <doCheck>false</doCheck>
+                    <doUpdate>false</doUpdate>
+                    <revisionOnScmFailure>0</revisionOnScmFailure>
+                    <shortRevisionLength>8</shortRevisionLength>
+                    <timestampFormat>{0,date,yyyy}</timestampFormat>
                 </configuration>
             </plugin>
             <plugin>
@@ -57,9 +83,9 @@
                 <configuration>
                     <instructions>
                         <!-- Change package and plugin class here -->
-                        <Export-Package>com.kinnara.kecakplugins.pushnotification</Export-Package>
-                        <Private-Package>com.kinnara.kecakplugins.pushnotification.*</Private-Package>
-                        <Bundle-Activator>com.kinnara.kecakplugins.pushnotification.Activator</Bundle-Activator>
+                        <Export-Package>com.kinnarastudio.kecakplugins.pushnotification</Export-Package>
+                        <Private-Package>com.kinnarastudio.kecakplugins.pushnotification.*</Private-Package>
+                        <Bundle-Activator>com.kinnarastudio.kecakplugins.pushnotification.Activator</Bundle-Activator>
                         <Import-Package>!*,org.joget.report.dao,org.joget.report.model,org.joget.report.service,org.joget.commons.util,org.joget.plugin.base,org.joget.plugin.property.model,org.joget.plugin.property.service,org.joget.directory.model,org.joget.directory.model.service,org.joget.directory.dao,org.joget.workflow.model,org.joget.workflow.model.dao,org.joget.workflow.model.service,org.joget.workflow.util,org.joget.apps.app.dao,org.joget.apps.app.lib,org.joget.apps.app.model,org.joget.apps.app.service,org.joget.apps.datalist.lib,org.joget.apps.datalist.model,org.joget.apps.datalist.service,org.joget.apps.form.lib,org.joget.apps.form.dao,org.joget.apps.form.model,org.joget.apps.form.service,org.joget.apps.list.service,org.joget.apps.userview.lib,org.joget.apps.userview.model,org.joget.apps.userview.service,org.joget.apps.workflow.lib,javax.servlet,javax.servlet.http,org.osgi.framework;version="1.3.0"</Import-Package>
                         <!-- End change package and plugin class here -->
                         <Embed-Dependency>*;scope=compile|runtime;inline=false</Embed-Dependency>
@@ -71,6 +97,22 @@
                 </configuration>
             </plugin>
         </plugins>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>true</filtering>
+                <includes>
+                    <include>**/*.properties</include>
+                </includes>
+            </resource>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>false</filtering>
+                <excludes>
+                    <exclude>**/*.properties</exclude>
+                </excludes>
+            </resource>
+        </resources>
     </build>
     <dependencies>
         <dependency>
@@ -94,14 +136,20 @@
         <dependency>
             <groupId>org.joget</groupId>
             <artifactId>wflow-core</artifactId>
-            <version>5.0-SNAPSHOT</version>
+            <version>7.0-SNAPSHOT</version>
             <scope>provided</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>javax.servlet</groupId>
+                    <artifactId>javax.servlet-api</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <!-- https://mvnrepository.com/artifact/com.google.firebase/firebase-admin -->
         <dependency>
             <groupId>com.google.firebase</groupId>
             <artifactId>firebase-admin</artifactId>
-            <version>6.12.2</version>
+            <version>9.3.0</version>
         </dependency>
         <!-- Change plugin specific dependencies here -->
         <dependency>
@@ -137,7 +185,7 @@
         <dependency>
             <groupId>com.kinnarastudio</groupId>
             <artifactId>kinnara-commons</artifactId>
-            <version>1.2.3</version>
+            <version>4.1.1</version>
         </dependency>
         <dependency>
             <groupId>org.apache.commons</groupId>
@@ -146,4 +194,11 @@
         </dependency>
         <!-- End change plugin specific dependencies here -->
     </dependencies>
+    <repositories>
+        <repository>
+            <id>maven_central</id>
+            <name>Maven Central</name>
+            <url>https://repo.maven.apache.org/maven2/</url>
+        </repository>
+    </repositories>
 </project>
