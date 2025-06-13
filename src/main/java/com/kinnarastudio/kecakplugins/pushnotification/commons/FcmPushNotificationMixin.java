@@ -41,6 +41,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 public interface FcmPushNotificationMixin {
+
     Pattern CODE_PATTERN = Pattern.compile("\\$\\{[a-zA-Z_][a-zA-Z0-9_]+\\.[a-zA-Z_][a-zA-Z0-9_]+\\}");
     Pattern WF_VARIABLE_PATTERN = Pattern.compile("(?<=\\$\\{variable\\.)[a-zA-Z_][a-zA-Z0-9_]+(?=\\})");
     Pattern ACTIVITY_PROPERTY_PATTERN = Pattern.compile("(?<=\\$\\{activity\\.)[a-zA-Z_][a-zA-Z0-9_]+(?=\\})");
@@ -73,8 +74,7 @@ public interface FcmPushNotificationMixin {
 
         HttpPost request = getFcmRequest(authorization, data);
 
-        try (CloseableHttpClient client = HttpClientBuilder.create().build();
-             CloseableHttpResponse response = client.execute(request)) {
+        try (CloseableHttpClient client = HttpClientBuilder.create().build(); CloseableHttpResponse response = client.execute(request)) {
 
             if (debug) {
                 try (BufferedReader br = new BufferedReader(new InputStreamReader(response.getEntity().getContent()))) {
@@ -165,6 +165,20 @@ public interface FcmPushNotificationMixin {
                 .count();
     }
 
+    default long sendNotifications(AppDefinition appDefinition, Collection<String> usernames, String title, String content) {
+        final WorkflowUserManager workflowUserManager = (WorkflowUserManager) AppUtil.getApplicationContext().getBean("workflowUserManager");
+        final WorkflowManager workflowManager = (WorkflowManager) AppUtil.getApplicationContext().getBean("workflowManager");
+
+        return usernames.stream()
+                .filter(Objects::nonNull)
+                .filter(u -> !u.isEmpty())
+                .distinct()
+                .filter(Try.onPredicate(username -> {
+                    return sendNotification(appDefinition, username, (WorkflowActivity) null, title, content);
+                }))
+                .count();
+    }
+
     default JSONObject getNotificationPayload(AppDefinition appDefinition, String to, String topic, WorkflowActivity activity, String notificationTitle, String notificationContent) throws JSONException {
         String formDefId = getFormFromActivity(appDefinition, activity.getProcessDefId(), activity.getActivityDefId()).map(f -> f.getPropertyString("id")).orElse("");
         return getNotificationPayload(to, topic, activity.getProcessId(), activity.getProcessName(), activity.getId(), activity.getName(), formDefId, notificationTitle, notificationContent);
@@ -184,40 +198,49 @@ public interface FcmPushNotificationMixin {
      */
     default JSONObject getNotificationPayload(String to, String topic, String processId, String processName, String activityId, String activityName, String formDefId, String title, String content) throws JSONException {
         AppDefinition appDefinition = AppUtil.getCurrentAppDefinition();
-        return new JSONObject() {{
-            if (to != null && !to.isEmpty())
-                put("to", to);
+        return new JSONObject() {
+            {
+                if (to != null && !to.isEmpty()) {
+                    put("to", to);
+                }
 
-            if (topic != null && !topic.isEmpty())
-                put("to", "/topics/" + topic);
+                if (topic != null && !topic.isEmpty()) {
+                    put("to", "/topics/" + topic);
+                }
 
-            put("content_available", true);
+                put("content_available", true);
 
-            put("data", new JSONObject() {{
-                put("title", title);
-                put("messages", content);
-                put("activityName", activityName);
-                put("activityId", activityId);
-                put("processId", processId);
-                put("processName", processName);
-                put("appId", appDefinition.getAppId());
-                put("appVersion", appDefinition.getVersion());
-                put("formId", formDefId);
-                put("click_action", "FLUTTER_NOTIFICATION_CLICK");
-            }});
+                put("data", new JSONObject() {
+                    {
+                        put("title", title);
+                        put("messages", content);
+                        put("activityName", activityName);
+                        put("activityId", activityId);
+                        put("processId", processId);
+                        put("processName", processName);
+                        put("appId", appDefinition.getAppId());
+                        put("appVersion", appDefinition.getVersion());
+                        put("formId", formDefId);
+                        put("click_action", "FLUTTER_NOTIFICATION_CLICK");
+                    }
+                });
 
-            put("notification", new JSONObject() {{
-                put("title", title);
-                put("body", content);
-            }});
-        }};
+                put("notification", new JSONObject() {
+                    {
+                        put("title", title);
+                        put("body", content);
+                    }
+                });
+            }
+        };
     }
 
     default Optional<Form> getFormFromAssignment(WorkflowAssignment workflowAssignment) {
         AppService appService = (AppService) AppUtil.getApplicationContext().getBean("appService");
 
         // get application definition
-        @Nonnull Optional<AppDefinition> optAppDefinition = getApplicationDefinition(workflowAssignment);
+        @Nonnull
+        Optional<AppDefinition> optAppDefinition = getApplicationDefinition(workflowAssignment);
 
         FormData formData = new FormData();
         formData.setActivityId(workflowAssignment.getActivityId());
@@ -231,8 +254,8 @@ public interface FcmPushNotificationMixin {
     }
 
     /**
-     * Check form authorization
-     * Restrict if no permission is set and user is anonymous
+     * Check form authorization Restrict if no permission is set and user is
+     * anonymous
      *
      * @param form
      * @param formData
@@ -259,8 +282,8 @@ public interface FcmPushNotificationMixin {
         AppDefinition appDefinition = Optional.of(activityId)
                 .map(appService::getAppDefinitionForWorkflowActivity)
                 .orElseGet(() -> Optional.of(processId)
-                        .map(appService::getAppDefinitionForWorkflowProcess)
-                        .orElse(null));
+                .map(appService::getAppDefinitionForWorkflowProcess)
+                .orElse(null));
 
         return Optional.ofNullable(appDefinition);
     }
@@ -344,11 +367,13 @@ public interface FcmPushNotificationMixin {
         WorkflowManager workflowManager = (WorkflowManager) AppUtil.getApplicationContext().getBean("workflowManager");
 
         JSONObject jsonHtmlPayload = new JSONObject();
-        if (to != null && !to.isEmpty())
+        if (to != null && !to.isEmpty()) {
             jsonHtmlPayload.put("to", to);
+        }
 
-        if (topic != null && !topic.isEmpty())
+        if (topic != null && !topic.isEmpty()) {
             jsonHtmlPayload.put("to", "/topics/" + topic);
+        }
 
         jsonHtmlPayload.put("content_available", true);
 

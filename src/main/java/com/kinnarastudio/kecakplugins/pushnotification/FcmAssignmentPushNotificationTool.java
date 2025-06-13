@@ -125,7 +125,7 @@ public class FcmAssignmentPushNotificationTool extends DefaultApplicationPlugin 
                 long notificationCount = sendNotifications(appDefinition, users, processId, title, content);
 
                 if (notificationCount == 0) {
-                    LogUtil.warn(getClassName(), "Nobody received tbe notification");
+                    LogUtil.warn(getClassName(), "Nobody received the notification");
                 }
 
             })).start();

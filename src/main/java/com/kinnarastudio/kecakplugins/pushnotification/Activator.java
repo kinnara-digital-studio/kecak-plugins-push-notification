@@ -2,6 +2,7 @@ package com.kinnarastudio.kecakplugins.pushnotification;
 
 import java.util.ArrayList;
 import java.util.Collection;
+
 import org.osgi.framework.BundleActivator;
 import org.osgi.framework.BundleContext;
 import org.osgi.framework.ServiceRegistration;
@@ -16,6 +17,7 @@ public class Activator implements BundleActivator {
         //Register plugin here
         registrationList.add(context.registerService(FcmPushNotificationAuditTrail.class.getName(), new FcmPushNotificationAuditTrail(), null));
         registrationList.add(context.registerService(FcmAssignmentPushNotificationTool.class.getName(), new FcmAssignmentPushNotificationTool(), null));
+        registrationList.add(context.registerService(FcmSimplePushNotificationTool.class.getName(), new FcmSimplePushNotificationTool(), null));
         registrationList.add(context.registerService(FcmPushNotificationParticipant.class.getName(), new FcmPushNotificationParticipant(), null));
     }
 

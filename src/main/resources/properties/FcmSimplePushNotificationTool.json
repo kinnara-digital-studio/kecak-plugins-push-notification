@@ -6,7 +6,6 @@
         "name": "fcmDatabaseUrl",
         "label": "@@pushNotification.fcmDatabaseUrl@@",
         "required": "true",
-        "value": "kecak-mobile",
         "type": "textfield"
       },
       {
@@ -26,9 +25,7 @@
       {
         "name" : "participantId",
         "label" : "@@pushNotification.participantId@@",
-        "type" : "multiselect",
-        "options_ajax_on_change" : "processId",
-        "options_ajax" : "[CONTEXT_PATH]/web/json/app[APP_PATH]/plugin/%s/service?action=getParticipants"
+        "type" : "textfield"
       },
       {
         "name": "userId",
